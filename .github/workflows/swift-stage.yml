@@ -86,7 +86,10 @@ jobs:
           if [ -n "$DERIVATIONS" ]; then
             targets=()
             for name in $DERIVATIONS; do
-              mapfile -t -O "${#targets[@]}" targets < <(nix-store --query --requisites "${drvs[@]}" | grep -- "-$name\.drv$")
+              # `mapfile` is not available in the Bash shipped with macOS.
+              while IFS= read -r drv; do
+                targets+=("$drv")
+              done < <(nix-store --query --requisites "${drvs[@]}" | grep -- "-$name\.drv$")
             done
           else
             targets=("${drvs[@]}")
