@@ -90,6 +90,12 @@ stdenv.mkDerivation (finalAttrs: {
       url = "https://github.com/swiftlang/swift-package-manager/commit/e1910f814cc1be40c709c3987a29488b9bee2f92.patch?full_index=1";
       hash = "sha256-4Ew/cKlk+Zn8cIQvh0jQy4Fz+xGYBYwch4+SBu1nKpI=";
     })
+    # SwiftPM looks for `swiftpm-testing-helper` next to the toolchain. Look for it in $out as well.
+    ./patches/0012-find-swiftpm-testing-helper-in-store.patch
+    # The CMake build doesn’t build `swiftpm-testing-helper`, which `swift test` requires on Darwin.
+    # Build it the same way `Package.swift` does (only on Darwin).
+    # See https://github.com/swiftlang/swift-package-manager/issues/10600.
+    ./patches/0013-build-swiftpm-testing-helper-with-cmake.patch
   ];
 
   postPatch = ''

@@ -1,0 +1,62 @@
+name: SwiftPM
+
+# Tests that `swift test` can find `swiftpm-testing-helper` when running Swift Testing tests.
+# See https://github.com/swiftlang/swift-package-manager/issues/10600.
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: swiftpm-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Enables `pipefail`.
+    shell: bash
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS 15
+            runner: macos-15
+          - name: macOS 26
+            runner: macos-26
+          - name: Linux
+            runner: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - name: Build SwiftPM
+        run: nix-build -A swiftPackages.swiftpm --out-link swiftpm
+
+      - name: Check swiftpm-testing-helper
+        run: |
+          find swiftpm/ -type f -o -type l | sort
+          if [ "$RUNNER_OS" = macOS ]; then
+            test -x swiftpm/libexec/swift/pm/swiftpm-testing-helper
+          fi
+
+      - name: Run the swift-testing-helper test (in the Nix sandbox)
+        run: nix-build -A swiftPackages.swiftpm.tests.swift-testing-helper --no-out-link
+
+      - name: Run swift test (outside the Nix sandbox)
+        working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-testing-helper/src
+        run: |
+          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-testing-helper \
+            --run 'TERM=dumb swift test --disable-xctest' 2>&1 | tee "$RUNNER_TEMP/test.log"
+          grep -q 'Test run with 1 test .*passed' "$RUNNER_TEMP/test.log"

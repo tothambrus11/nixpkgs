@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Wed, 30 Sep 2026 21:47:29 +0200
+Subject: [PATCH 12/13] Find swiftpm-testing-helper in the store
+
+SwiftPM only looks for `swiftpm-testing-helper` relative to the toolchain,
+but nixpkgs installs SwiftPM separately from it. Look in SwiftPM’s own
+`libexec` folder as well.
+---
+ Sources/PackageModel/UserToolchain.swift | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Sources/PackageModel/UserToolchain.swift b/Sources/PackageModel/UserToolchain.swift
+--- a/Sources/PackageModel/UserToolchain.swift
++++ b/Sources/PackageModel/UserToolchain.swift
+@@ -503,7 +503,9 @@
+         let binDirectories = self.swiftSDK.toolset.rootPaths +
+             self.swiftSDK.toolset.rootPaths.map {
+                 $0.parentDirectory.appending(components: ["libexec", "swift", "pm"])
+-            }
++            } +
++            // SwiftPM is installed separately from the toolchain in nixpkgs. Look in its own `libexec` too.
++            [try? AbsolutePath(validating: "@out@/libexec/swift/pm")].compactMap { $0 }
+ 
+         return try UserToolchain.getTool(
+             "swiftpm-testing-helper",
+-- 
+2.54.0
