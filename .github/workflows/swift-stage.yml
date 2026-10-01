@@ -22,8 +22,14 @@ on:
         description: Names of the derivations to build from the closure of the tests (builds the tests if empty)
         default: ""
         type: string
+      reuse-run-id:
+        description: ID of a previous run whose built paths are reused
+        default: ""
+        type: string
 
 permissions:
+  # Needed to download the artifacts of previous runs.
+  actions: read
   contents: read
 
 defaults:
@@ -58,6 +64,16 @@ jobs:
           pattern: nix-store-${{ inputs.cache }}-*
           path: ${{ runner.temp }}/nix-store-in
           merge-multiple: true
+
+      - name: Download the paths built by a previous run
+        if: inputs.reuse-run-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: nix-store-${{ inputs.cache }}-*
+          path: ${{ runner.temp }}/nix-store-in
+          merge-multiple: true
+          run-id: ${{ inputs.reuse-run-id }}
+          github-token: ${{ github.token }}
 
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
@@ -101,7 +117,7 @@ jobs:
             targets=("${drvs[@]}")
           fi
           printf 'Building %s\n' "${targets[@]}"
-          nix-store --realise "${targets[@]}" > /dev/null
+          nix-store --realise --keep-going "${targets[@]}" > /dev/null
 
       - name: Export the built paths
         if: ${{ !cancelled() }}
@@ -131,7 +147,7 @@ jobs:
           retention-days: 7
 
       - name: Check swiftpm-testing-helper
-        if: inputs.derivations == ''
+        if: ${{ !cancelled() && inputs.derivations == '' }}
         run: |
           swiftpm=$(nix-build -A swiftPackages.swiftpm --no-out-link)
           if [ "$RUNNER_OS" = macOS ]; then
@@ -140,7 +156,7 @@ jobs:
           fi
 
       - name: Run swift test (outside the Nix sandbox)
-        if: inputs.derivations == ''
+        if: ${{ !cancelled() && inputs.derivations == '' }}
         working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-testing-helper/src
         env:
           # `nix-shell` gets `bashInteractive` from `<nixpkgs>`. Without it, it falls back to the system Bash,
@@ -150,3 +166,14 @@ jobs:
           nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-testing-helper \
             --run 'TERM=dumb swift test --disable-xctest' 2>&1 | tee "$RUNNER_TEMP/test.log"
           grep -q 'Test run with 1 test .*passed' "$RUNNER_TEMP/test.log"
+
+      - name: Run the SourceKit-LSP test (outside the Nix sandbox)
+        if: ${{ !cancelled() && inputs.derivations == '' }}
+        env:
+          NIX_PATH: nixpkgs=${{ github.workspace }}
+        run: |
+          test=pkgs/development/compilers/swift/by-name/so/sourcekit-lsp/tests/semantic-functionality
+          cp -R "$test/src" "$RUNNER_TEMP/sourcekit-lsp-test"
+          chmod -R u+w "$RUNNER_TEMP/sourcekit-lsp-test"
+          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.sourcekit-lsp.tests.semantic-functionality \
+            --run "cd '$RUNNER_TEMP/sourcekit-lsp-test' && python3 '$GITHUB_WORKSPACE/$test/test.py' ."
