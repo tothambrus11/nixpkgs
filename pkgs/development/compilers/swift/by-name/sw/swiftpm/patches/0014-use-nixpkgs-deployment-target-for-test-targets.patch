@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Thu, 1 Oct 2026 11:24:52 +0200
+Subject: [PATCH 14/15] Use the nixpkgs deployment target for test targets on macOS
+
+SwiftPM determines the minimum deployment target of test targets on
+macOS by looking at XCTest.framework in Xcode. It is not available in
+nixpkgs, so SwiftPM falls back to the oldest supported version (10.13),
+which is too old for Swift Testing (e.g., `@Test` requires macOS 10.15).
+---
+ Sources/PackageModel/MinimumDeploymentTarget.swift | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Sources/PackageModel/MinimumDeploymentTarget.swift b/Sources/PackageModel/MinimumDeploymentTarget.swift
+index d2510e3..cd08886 100644
+--- a/Sources/PackageModel/MinimumDeploymentTarget.swift
++++ b/Sources/PackageModel/MinimumDeploymentTarget.swift
+@@ -79,6 +79,13 @@ public struct MinimumDeploymentTarget {
+                 return version
+             }
+         } catch { } // we do not treat this a fatal and instead use the fallback minimum deployment target
++
++        // XCTest.framework from Xcode is not available in nixpkgs. Use the deployment target used by nixpkgs
++        // instead of the oldest supported version, which is too old for Swift Testing.
++        let nixpkgsDeploymentTarget = "@MACOSX_DEPLOYMENT_TARGET@"
++        if platform == .macOS, nixpkgsDeploymentTarget.first?.isNumber == true {
++            return PlatformVersion(nixpkgsDeploymentTarget)
++        }
+         #endif
+ 
+         return platform.oldestSupportedVersion

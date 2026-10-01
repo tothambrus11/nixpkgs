@@ -96,6 +96,13 @@ stdenv.mkDerivation (finalAttrs: {
     # Build it the same way `Package.swift` does (only on Darwin).
     # See https://github.com/swiftlang/swift-package-manager/issues/10600.
     ./patches/0013-build-swiftpm-testing-helper-with-cmake.patch
+    # SwiftPM uses XCTest.framework from Xcode to determine the deployment target of test targets on macOS.
+    # It isn’t available in nixpkgs, so use the nixpkgs deployment target instead of macOS 10.13, which is too old
+    # for Swift Testing.
+    ./patches/0014-use-nixpkgs-deployment-target-for-test-targets.patch
+    # The CMake build doesn’t add rpaths to the back-deployed libraries (such as `libswiftCompatibilitySpan.dylib`)
+    # to executables like SwiftPM does when building itself, so SwiftPM fails to run on macOS 15 and older.
+    ./patches/0015-add-back-deployment-rpaths-with-cmake.patch
   ];
 
   postPatch = ''
@@ -109,6 +116,10 @@ stdenv.mkDerivation (finalAttrs: {
     # Set the deployment target when building package manifests to one supported in nixpkgs.
     substituteInPlace Sources/PackageLoading/ManifestLoader.swift \
       --replace-fail '.tripleString(forPlatformVersion: version)' ".tripleString(forPlatformVersion: \"$MACOSX_DEPLOYMENT_TARGET\")"
+
+    # Set the deployment target of test targets on macOS to one supported in nixpkgs.
+    substituteInPlace Sources/PackageModel/MinimumDeploymentTarget.swift \
+      --replace-fail '@MACOSX_DEPLOYMENT_TARGET@' "$MACOSX_DEPLOYMENT_TARGET"
   '';
 
   strictDeps = true;

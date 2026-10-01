@@ -42,6 +42,7 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
 
       - name: Build SwiftPM
+        id: build
         run: nix-build -A swiftPackages.swiftpm --out-link swiftpm
 
       - name: Check swiftpm-testing-helper
@@ -49,12 +50,15 @@ jobs:
           find swiftpm/ -type f -o -type l | sort
           if [ "$RUNNER_OS" = macOS ]; then
             test -x swiftpm/libexec/swift/pm/swiftpm-testing-helper
+            otool -l swiftpm/bin/swift-build | grep -A2 LC_RPATH
           fi
 
       - name: Run the swift-testing-helper test (in the Nix sandbox)
         run: nix-build -A swiftPackages.swiftpm.tests.swift-testing-helper --no-out-link
 
       - name: Run swift test (outside the Nix sandbox)
+        # Also run this when the sandboxed test fails to tell whether the failure is specific to the sandbox.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-testing-helper/src
         run: |
           nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-testing-helper \

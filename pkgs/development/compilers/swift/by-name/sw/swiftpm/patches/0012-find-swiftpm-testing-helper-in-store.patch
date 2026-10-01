@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Ambrus Toth <palpista11@gmail.com>
 Date: Wed, 30 Sep 2026 21:47:29 +0200
-Subject: [PATCH 12/13] Find swiftpm-testing-helper in the store
+Subject: [PATCH 12/15] Find swiftpm-testing-helper in the store
 
 SwiftPM only looks for `swiftpm-testing-helper` relative to the toolchain,
 but nixpkgs installs SwiftPM separately from it. Look in SwiftPM’s own
