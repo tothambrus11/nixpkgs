@@ -60,6 +60,10 @@ jobs:
         # Also run this when the sandboxed test fails to tell whether the failure is specific to the sandbox.
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-testing-helper/src
+        env:
+          # `nix-shell` gets `bashInteractive` from `<nixpkgs>`. Without it, it falls back to the system Bash,
+          # which is too old on macOS.
+          NIX_PATH: nixpkgs=${{ github.workspace }}
         run: |
           nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-testing-helper \
             --run 'TERM=dumb swift test --disable-xctest' 2>&1 | tee "$RUNNER_TEMP/test.log"
