@@ -1,0 +1,136 @@
+name: Swift stage
+
+# Builds part of the Swift toolchain and passes the built paths on to the following stages as a binary cache artifact.
+# The toolchain takes too long to build in a single job when it is not available from cache.nixos.org.
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: Runner to use
+        required: true
+        type: string
+      cache:
+        description: Name of the binary cache shared by the stages of one platform
+        required: true
+        type: string
+      stage:
+        description: Name of the stage
+        required: true
+        type: string
+      derivations:
+        description: Names of the derivations to build from the closure of the tests (builds the tests if empty)
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Enables `pipefail`.
+    shell: bash
+
+env:
+  TESTS: >-
+    swiftPackages.swiftpm.tests.swift-testing-helper
+    swiftPackages.sourcekit-lsp.tests.semantic-functionality
+
+jobs:
+  build:
+    name: ${{ inputs.stage }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost
+          df -h /
+
+      - name: Download the paths built by previous stages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: nix-cache-${{ inputs.cache }}-*
+          path: ${{ runner.temp }}/nix-cache
+          merge-multiple: true
+
+      - name: Set up the binary cache
+        run: |
+          mkdir -p "$RUNNER_TEMP/nix-cache"
+          if [ ! -e "$RUNNER_TEMP/nix-cache/nix-cache-info" ]; then
+            echo "StoreDir: /nix/store" > "$RUNNER_TEMP/nix-cache/nix-cache-info"
+          fi
+          du -sh "$RUNNER_TEMP/nix-cache"
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            extra-substituters = file://${{ runner.temp }}/nix-cache
+            # The binary cache of the previous stages is not signed.
+            require-sigs = false
+            post-build-hook = ${{ github.workspace }}/.github/swift-ci-record-built-paths.sh
+
+      - name: Build
+        env:
+          DERIVATIONS: ${{ inputs.derivations }}
+        run: |
+          drvs=()
+          for attr in $TESTS; do
+            drvs+=("$(nix-instantiate -A "$attr")")
+          done
+          if [ -n "$DERIVATIONS" ]; then
+            targets=()
+            for name in $DERIVATIONS; do
+              mapfile -t -O "${#targets[@]}" targets < <(nix-store --query --requisites "${drvs[@]}" | grep -- "-$name\.drv$")
+            done
+          else
+            targets=("${drvs[@]}")
+          fi
+          printf 'Building %s\n' "${targets[@]}"
+          nix-store --realise "${targets[@]}" > /dev/null
+
+      - name: Export the built paths
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/nix-cache-out"
+          if [ -s /tmp/nix-built-paths ]; then
+            # Only the built paths are copied. Their dependencies are available from cache.nixos.org or previous stages.
+            tr ' ' '\n' < /tmp/nix-built-paths | sort -u | xargs nix copy --no-recursive \
+              --to "file://$RUNNER_TEMP/nix-cache-out?compression=zstd"
+          fi
+          du -sh "$RUNNER_TEMP/nix-cache-out"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: nix-cache-${{ inputs.cache }}-${{ inputs.stage }}
+          path: ${{ runner.temp }}/nix-cache-out
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0
+
+      - name: Check swiftpm-testing-helper
+        if: inputs.derivations == ''
+        run: |
+          swiftpm=$(nix-build -A swiftPackages.swiftpm --no-out-link)
+          if [ "$RUNNER_OS" = macOS ]; then
+            test -x "$swiftpm/libexec/swift/pm/swiftpm-testing-helper"
+            otool -l "$swiftpm/bin/swift-build" | grep -A2 LC_RPATH
+          fi
+
+      - name: Run swift test (outside the Nix sandbox)
+        if: inputs.derivations == ''
+        working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-testing-helper/src
+        env:
+          # `nix-shell` gets `bashInteractive` from `<nixpkgs>`. Without it, it falls back to the system Bash,
+          # which is too old on macOS.
+          NIX_PATH: nixpkgs=${{ github.workspace }}
+        run: |
+          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-testing-helper \
+            --run 'TERM=dumb swift test --disable-xctest' 2>&1 | tee "$RUNNER_TEMP/test.log"
+          grep -q 'Test run with 1 test .*passed' "$RUNNER_TEMP/test.log"

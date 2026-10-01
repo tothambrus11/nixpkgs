@@ -1,0 +1,73 @@
+name: Swift
+
+# Tests the Swift toolchain:
+# - `swift test` finds `swiftpm-testing-helper` when running Swift Testing tests
+#   (https://github.com/swiftlang/swift-package-manager/issues/10600).
+# - SourceKit-LSP provides semantic functionality without additional configuration.
+#
+# Changes to the Swift compiler require building the whole toolchain, which takes too long for a single job. It is
+# built in stages, which pass the paths they built on to the following stages.
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: swift-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-stage0:
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 1-swiftc-stage0, derivations: swiftc-cxx_bootstrap-6.2.4 }
+  linux-stage1:
+    needs: linux-stage0
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 2-swiftc-stage1, derivations: swiftc-bootstrap-6.2.4 }
+  linux-stage2:
+    needs: linux-stage1
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 3-swiftc, derivations: swiftc-6.2.4 }
+  linux-stdlib:
+    needs: linux-stage2
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 4-stdlib, derivations: stdlib-6.2.4 }
+  linux-lldb:
+    needs: linux-stdlib
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 5-lldb, derivations: lldb-17.0.0 }
+  linux-test:
+    needs: linux-lldb
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 6-test }
+
+  darwin-stage0:
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 1-swiftc-stage0, derivations: swiftc-cxx_bootstrap-6.2.4 }
+  darwin-stage1:
+    needs: darwin-stage0
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 2-swiftc-stage1, derivations: swiftc-bootstrap-6.2.4 }
+  darwin-stage2:
+    needs: darwin-stage1
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 3-swiftc, derivations: swiftc-6.2.4 }
+  darwin-stdlib:
+    needs: darwin-stage2
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 4-stdlib, derivations: stdlib-6.2.4 }
+  darwin-lldb:
+    needs: darwin-stdlib
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 5-lldb, derivations: lldb-17.0.0 }
+  darwin-test:
+    needs: darwin-lldb
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: "${{ matrix.runner }}", cache: darwin, stage: "6-test-${{ matrix.runner }}" }
