@@ -1,6 +1,6 @@
 name: Swift stage
 
-# Builds part of the Swift toolchain and passes the built paths on to the following stages as a binary cache artifact.
+# Builds part of the Swift toolchain and passes the paths it built on to the following stages as an artifact.
 # The toolchain takes too long to build in a single job when it is not available from cache.nixos.org.
 
 on:
@@ -11,11 +11,11 @@ on:
         required: true
         type: string
       cache:
-        description: Name of the binary cache shared by the stages of one platform
+        description: Name shared by the stages of one platform
         required: true
         type: string
       stage:
-        description: Name of the stage
+        description: Name of the stage (stages are imported in the order of their names)
         required: true
         type: string
       derivations:
@@ -55,25 +55,31 @@ jobs:
       - name: Download the paths built by previous stages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: nix-cache-${{ inputs.cache }}-*
-          path: ${{ runner.temp }}/nix-cache
+          pattern: nix-store-${{ inputs.cache }}-*
+          path: ${{ runner.temp }}/nix-store-in
           merge-multiple: true
-
-      - name: Set up the binary cache
-        run: |
-          mkdir -p "$RUNNER_TEMP/nix-cache"
-          if [ ! -e "$RUNNER_TEMP/nix-cache/nix-cache-info" ]; then
-            echo "StoreDir: /nix/store" > "$RUNNER_TEMP/nix-cache/nix-cache-info"
-          fi
-          du -sh "$RUNNER_TEMP/nix-cache"
 
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
           extra_nix_config: |
-            extra-substituters = file://${{ runner.temp }}/nix-cache
-            # The binary cache of the previous stages is not signed.
+            # The paths imported from previous stages are not signed.
             require-sigs = false
             post-build-hook = ${{ github.workspace }}/.github/swift-ci-record-built-paths.sh
+
+      - name: Import the paths built by previous stages
+        run: |
+          shopt -s nullglob
+          # Stages are imported in order because later stages reference the paths of earlier ones.
+          for export in "$RUNNER_TEMP"/nix-store-in/*.nar; do
+            echo "Importing $export"
+            # Paths that were not built by a stage are available from cache.nixos.org.
+            references=$(cat "${export%.nar}.references")
+            if [ -n "$references" ]; then
+              # shellcheck disable=SC2086
+              nix-store --realise $references > /dev/null
+            fi
+            nix-store --import < "$export" > /dev/null
+          done
 
       - name: Build
         env:
@@ -99,23 +105,30 @@ jobs:
 
       - name: Export the built paths
         if: ${{ !cancelled() }}
+        env:
+          STAGE: ${{ inputs.stage }}
         run: |
-          mkdir -p "$RUNNER_TEMP/nix-cache-out"
+          mkdir -p "$RUNNER_TEMP/nix-store-out"
           if [ -s /tmp/nix-built-paths ]; then
-            # Only the built paths are copied. Their dependencies are available from cache.nixos.org or previous stages.
-            tr ' ' '\n' < /tmp/nix-built-paths | sort -u | xargs nix copy --no-recursive \
-              --to "file://$RUNNER_TEMP/nix-cache-out?compression=zstd"
+            built=$(tr ' ' '\n' < /tmp/nix-built-paths | sort -u)
+            # Export the paths in dependency order, so they can be imported in the same order.
+            # shellcheck disable=SC2046,SC2086
+            nix-store --export $(nix-store --query --requisites $built | grep -Fx -f <(echo "$built")) \
+              > "$RUNNER_TEMP/nix-store-out/$STAGE.nar"
+            # Record the dependencies that were not built by this stage, so they can be fetched before importing.
+            # shellcheck disable=SC2086
+            nix-store --query --references $built | sort -u | { grep -Fxv -f <(echo "$built") || true; } \
+              > "$RUNNER_TEMP/nix-store-out/$STAGE.references"
           fi
-          du -sh "$RUNNER_TEMP/nix-cache-out"
+          du -sh "$RUNNER_TEMP/nix-store-out"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
-          name: nix-cache-${{ inputs.cache }}-${{ inputs.stage }}
-          path: ${{ runner.temp }}/nix-cache-out
+          name: nix-store-${{ inputs.cache }}-${{ inputs.stage }}
+          path: ${{ runner.temp }}/nix-store-out
           if-no-files-found: ignore
           retention-days: 7
-          compression-level: 0
 
       - name: Check swiftpm-testing-helper
         if: inputs.derivations == ''
