@@ -1,18 +1,18 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Randy Eckenrode <randy@largeandhighquality.com>
 Date: Sat, 11 Jul 2026 16:07:13 -0400
-Subject: [PATCH 2/2] Load IndexStore from the store
+Subject: [PATCH 2/3] Load IndexStore from the store
 
 ---
- Sources/ToolchainRegistry/Toolchain.swift                 | 7 ++-----
- Tests/ToolchainRegistryTests/ToolchainRegistryTests.swift | 7 +------
- 2 files changed, 3 insertions(+), 11 deletions(-)
+ Sources/ToolchainRegistry/Toolchain.swift                 | 10 ++++------
+ Tests/ToolchainRegistryTests/ToolchainRegistryTests.swift |  7 +------
+ 2 files changed, 5 insertions(+), 12 deletions(-)
 
 diff --git a/Sources/ToolchainRegistry/Toolchain.swift b/Sources/ToolchainRegistry/Toolchain.swift
-index 41d697bd..008a77af 100644
+index 41d697b..bc12d4b 100644
 --- a/Sources/ToolchainRegistry/Toolchain.swift
 +++ b/Sources/ToolchainRegistry/Toolchain.swift
-@@ -330,11 +330,8 @@ public final class Toolchain: Sendable {
+@@ -330,14 +330,12 @@ public final class Toolchain: Sendable {
          foundAny = true
        }
  
@@ -23,11 +23,16 @@ index 41d697bd..008a77af 100644
 -      #endif
 +      let libIndexStorePath = URL(filePath: "@libclang@").appending(components: "lib", "libIndexStore\(dylibExtension)")
 +
++      // Don’t set `foundAny`. IndexStore is always found in the store, which would stop the search before `bin` and
++      // `usr/bin` are checked.
        if FileManager.default.isFile(at: libIndexStorePath) {
          libIndexStore = libIndexStorePath
-         foundAny = true
+-        foundAny = true
+       }
+ 
+       if foundAny {
 diff --git a/Tests/ToolchainRegistryTests/ToolchainRegistryTests.swift b/Tests/ToolchainRegistryTests/ToolchainRegistryTests.swift
-index 60c4bf10..c8582c7a 100644
+index 60c4bf1..51a615d 100644
 --- a/Tests/ToolchainRegistryTests/ToolchainRegistryTests.swift
 +++ b/Tests/ToolchainRegistryTests/ToolchainRegistryTests.swift
 @@ -758,11 +758,6 @@ private func makeToolchain(
