@@ -146,6 +146,8 @@ stdenv.mkDerivation (finalAttrs: {
     # Swift expects to find Clang next to it.
     ln -s ${lib.escapeShellArg (lib.getExe' llvmPackages_upstream.clang "clang")} "$out/bin/clang"
     ln -s ${lib.escapeShellArg (lib.getExe' llvmPackages_upstream.clang "clang++")} "$out/bin/clang++"
+    # SourceKit-LSP requires `clangd` to be part of the toolchain to use it with SwiftPM packages.
+    ln -s ${lib.escapeShellArg (lib.getExe' llvmPackages_upstream.clang-tools "clangd")} "$out/bin/clangd"
 
     # Swift has a separate resource root from Clang, but locates the Clang resource root via subdir or symlink.
     #
