@@ -1,0 +1,99 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Thu, 1 Oct 2026 13:00:40 +0200
+Subject: [PATCH 11/11] Find Clang relative to the toolchain when reading Nix flags
+
+Reading the C and C++ stdlib flags from the wrapped compiler relies on
+finding `clang` next to the main executable. That is only correct when
+the main executable is part of the toolchain (e.g., `swift-frontend`).
+When the compiler is used in-process by another program (e.g., SourceKit
+in `sourcekit-lsp`), no flags are found, so the C standard library and
+every module depending on it (e.g., Glibc and Foundation) fail to load.
+
+Use the path to `clang` from the compiler invocation instead, which is
+derived from the location of the toolchain. Fall back to finding it
+relative to the main executable if it is not set.
+---
+ lib/ClangImporter/ClangImporter.cpp     |  4 ++--
+ lib/ClangImporter/ClangIncludePaths.cpp |  4 ++--
+ lib/ClangImporter/ClangIncludePaths.h   | 28 ++++++++++++++++---------
+ 3 files changed, 22 insertions(+), 14 deletions(-)
+
+diff --git a/lib/ClangImporter/ClangImporter.cpp b/lib/ClangImporter/ClangImporter.cpp
+index 1b50ea3..77acb0d 100644
+--- a/lib/ClangImporter/ClangImporter.cpp
++++ b/lib/ClangImporter/ClangImporter.cpp
+@@ -566,12 +566,12 @@ void importer::getNormalInvocationArguments(
+ 
+   // Ensure libc is available. The C standard library is separate from the sysroot
+   // on most platforms in Nixpkgs. (Darwin is a prominent exception.)
+-  addFlagsFromNixCC(invocationArgStrs, "libc-cflags");
++  addFlagsFromNixCC(invocationArgStrs, importerOpts.clangPath, "libc-cflags");
+   
+   if (LangOpts.EnableCXXInterop) {
+     // Ensure the libc++ headers are available. The C++ standard library is separate
+     // from the sysroot on most platforms in Nixpkgs.
+-    addFlagsFromNixCC(invocationArgStrs, "libcxx-cxxflags");
++    addFlagsFromNixCC(invocationArgStrs, importerOpts.clangPath, "libcxx-cxxflags");
+ 
+     if (auto path = getCxxShimModuleMapPath(searchPathOpts, LangOpts, triple)) {
+       invocationArgStrs.push_back((Twine("-fmodule-map-file=") + *path).str());
+diff --git a/lib/ClangImporter/ClangIncludePaths.cpp b/lib/ClangImporter/ClangIncludePaths.cpp
+index 9099b30..78ab7dd 100644
+--- a/lib/ClangImporter/ClangIncludePaths.cpp
++++ b/lib/ClangImporter/ClangIncludePaths.cpp
+@@ -197,10 +197,10 @@ ClangImporter::createClangArgs(const ClangImporterOptions &ClangImporterOpts,
+ 
+   // Ensure libc is available. The C standard library is separate from the sysroot
+   // on most platforms in Nixpkgs. (Darwin is a prominent exception.)
+-  addFlagsFromNixCC(clangArgs, "libc-cflags");
++  addFlagsFromNixCC(clangArgs, ClangImporterOpts.clangPath, "libc-cflags");
+   
+   if (enableCXXInterop) {
+-    addFlagsFromNixCC(clangArgs, "libcxx-cxxflags");
++    addFlagsFromNixCC(clangArgs, ClangImporterOpts.clangPath, "libcxx-cxxflags");
+   }
+ 
+   llvm::opt::InputArgList clangDriverArgs =
+diff --git a/lib/ClangImporter/ClangIncludePaths.h b/lib/ClangImporter/ClangIncludePaths.h
+index 69be983..7bfa8c3 100644
+--- a/lib/ClangImporter/ClangIncludePaths.h
++++ b/lib/ClangImporter/ClangIncludePaths.h
+@@ -26,19 +26,27 @@ getCxxShimModuleMapPath(SearchPathOptions &opts, const LangOptions &langOpts,
+ } // namespace swift
+ 
+ template<typename T>
+-void addFlagsFromNixCC(std::vector<T> &invocationArgStrs, const char* flagFile) {
+-  auto swiftPath = llvm::sys::fs::getMainExecutable(nullptr, nullptr);
++void addFlagsFromNixCC(std::vector<T> &invocationArgStrs, llvm::StringRef invocationClangPath,
++                       const char* flagFile) {
++  // Read `flagFile` from Clang’s `nix-support` folder by finding it relative to the store
++  // location of `clang`, which is expected to be adjacent to Swift in `$out/bin`.
++  //
++  // Prefer the path to `clang` from the compiler invocation. It is derived from the location of
++  // the toolchain, which is also correct when the compiler is used in-process by another program
++  // (e.g., SourceKit in `sourcekit-lsp`). Otherwise, find it relative to the main executable.
++  llvm::SmallString<256> clangPath;
++  if (llvm::sys::path::is_absolute(invocationClangPath)) {
++    clangPath = invocationClangPath;
++  } else {
++    clangPath = llvm::sys::fs::getMainExecutable(nullptr, nullptr);
++    llvm::sys::path::remove_filename(clangPath);
++    llvm::sys::path::append(clangPath, "clang");
++  }
+ 
+-  if (swiftPath != "") {
++  if (llvm::sys::path::is_absolute(clangPath)) {
+     llvm::BumpPtrAllocator allocator;
+     llvm::StringSaver saver(allocator);
+-    
+-    // Read `flagFile` from Clang’s `nix-support` folder by finding it relative to the store
+-    // location of `clang`, which is expected to be adjacent to Swift in `$out/bin`.
+-    llvm::SmallString<256> clangPath = llvm::StringRef(swiftPath);
+-    llvm::sys::path::remove_filename(clangPath);
+-    llvm::sys::path::append(clangPath, "clang");
+-    
++
+     llvm::SmallString<256> path;
+    
+     // This shouldn’t happen, but if `real_path` fails to resolve `clang`, give up.
