@@ -70,6 +70,8 @@ jobs:
         env:
           TOOLCHAIN: ${{ matrix.toolchain }}
         run: |
+          # `timeout` is not available on macOS.
+          timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
           repo=$GITHUB_WORKSPACE
           if [ "$TOOLCHAIN" = base ]; then repo=$GITHUB_WORKSPACE/base; fi
           swift=$(nix-build "$repo" -A swiftPackages.swift --no-out-link)
@@ -82,18 +84,22 @@ jobs:
           otool -L "$framework/Versions/A/sourcekitd" || true
           cat "$framework/Versions/A/XPCServices/SourceKitService.xpc/Contents/Info.plist" || true
           echo "Running the service directly:"
-          DYLD_PRINT_LIBRARIES=0 timeout 10 "$service" 2>&1 | tail -20 || echo "exit code $?"
+          ls -laR "$framework/Versions/A/XPCServices"
+          timeout 10 "$service" 2>&1 | tail -20 || echo "exit code $?"
+          DYLD_PRINT_LIBRARIES=1 timeout 10 "$service" 2>&1 | tail -40 || echo "exit code $?"
 
       - name: Run the SourceKit-LSP test
         env:
           TOOLCHAIN: ${{ matrix.toolchain }}
         run: |
+          # `timeout` is not available on macOS.
+          timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
           repo=$GITHUB_WORKSPACE
           if [ "$TOOLCHAIN" = base ]; then repo=$GITHUB_WORKSPACE/base; fi
           test=$GITHUB_WORKSPACE/pkgs/development/compilers/swift/by-name/so/sourcekit-lsp/tests/semantic-functionality
           cp -R "$test/src" "$RUNNER_TEMP/project"
           chmod -R u+w "$RUNNER_TEMP/project"
-          NIX_PATH=nixpkgs=$repo timeout 600 nix-shell -p \
+          NIX_PATH=nixpkgs=$repo timeout 900 nix-shell -p \
             "with import $repo {}; [ swiftPackages.swift swiftPackages.swiftpm swiftPackages.sourcekit-lsp python3 ]" \
             --run "cd '$RUNNER_TEMP/project' && python3 '$test/test.py' ." 2>&1 | grep -v "pinging service" | tail -40 || true
 

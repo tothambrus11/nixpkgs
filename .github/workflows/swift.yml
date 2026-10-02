@@ -10,6 +10,8 @@ name: Swift
 
 on:
   push:
+    paths-ignore:
+      - .github/workflows/swift-debug.yml
   workflow_dispatch:
     inputs:
       reuse-run-id:
