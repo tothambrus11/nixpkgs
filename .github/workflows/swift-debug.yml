@@ -109,7 +109,7 @@ jobs:
           for f in ~/Library/Logs/DiagnosticReports/*SourceKit* /Library/Logs/DiagnosticReports/*SourceKit*; do
             [ -e "$f" ] || continue
             echo "=== $f"
-            head -c 6000 "$f"
+            cat "$f"
             echo
           done
           log show --last 30m --predicate 'process == "SourceKitService" OR eventMessage CONTAINS "SourceKitService"' \
