@@ -13,10 +13,10 @@ directly like on Linux. This allows XCTest-based tests to run on Darwin.
 Swift Testing-based tests run the same executable.
 ---
  Sources/Build/BuildPlan/BuildPlan+Test.swift  |  4 ++--
- Sources/Commands/SwiftTestCommand.swift       | 22 -------------------
- Sources/PackageModel/SwiftSDKs/SwiftSDK.swift |  7 +++---
+ Sources/Commands/SwiftTestCommand.swift       | 21 -------------------
+ Sources/PackageModel/SwiftSDKs/SwiftSDK.swift |  7 +++----
  .../BuildParameters+Testing.swift             |  3 ++-
- 4 files changed, 7 insertions(+), 29 deletions(-)
+ 4 files changed, 7 insertions(+), 28 deletions(-)
 
 diff --git a/Sources/Build/BuildPlan/BuildPlan+Test.swift b/Sources/Build/BuildPlan/BuildPlan+Test.swift
 index 545ecb2..ba27cde 100644
@@ -41,17 +41,10 @@ index 545ecb2..ba27cde 100644
                      if isEntryPointPathSpecifiedExplicitly {
                          // Allow using the explicitly-specified test entry point target, but still perform test discovery and thus declare a dependency on the discovery modules.
 diff --git a/Sources/Commands/SwiftTestCommand.swift b/Sources/Commands/SwiftTestCommand.swift
-index c2ae2ad..2eefae5 100644
+index c2ae2ad..4c313d3 100644
 --- a/Sources/Commands/SwiftTestCommand.swift
 +++ b/Sources/Commands/SwiftTestCommand.swift
-@@ -282,15 +282,12 @@ public struct SwiftTestCommand: AsyncSwiftCommand {
-             // Validate XCTest is available on Darwin-based systems. If it's not available and we're hitting this code
-             // path, that means the developer must have explicitly passed --enable-xctest (or the toolchain is
-             // corrupt, I suppose.)
--            let toolchain = try swiftCommandState.getTargetToolchain()
-             if case let .unsupported(reason) = try swiftCommandState.getHostToolchain().swiftSDK.xctestSupport {
-                 if let reason {
-                     throw TestError.xctestNotAvailable(reason: reason)
+@@ -289,8 +289,6 @@ public struct SwiftTestCommand: AsyncSwiftCommand {
                  } else {
                      throw TestError.xcodeNotInstalled
                  }
@@ -60,7 +53,7 @@ index c2ae2ad..2eefae5 100644
              }
  
              if !self.options.shouldRunInParallel {
-@@ -900,11 +897,7 @@ final class TestRunner {
+@@ -900,11 +898,7 @@ final class TestRunner {
              testSpecifier = testSpecifiers.joined(separator: ",")
          }
  
@@ -72,7 +65,7 @@ index c2ae2ad..2eefae5 100644
      }
  
      /// Creates an instance of TestRunner.
-@@ -965,23 +958,8 @@ final class TestRunner {
+@@ -965,23 +959,8 @@ final class TestRunner {
              args.append(testPath.relative(to: localFileSystem.currentWorkingDirectory!).pathString)
              args.append(contentsOf: self.additionalArguments)
          } else {
