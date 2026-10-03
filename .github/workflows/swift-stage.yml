@@ -69,8 +69,22 @@ jobs:
           i=0
           for id in $RUN_IDS; do
             i=$((i + 1))
-            gh run download "$id" -R "$GITHUB_REPOSITORY" -p "nix-store-$CACHE-*" -D "$RUNNER_TEMP/nix-store-in/$i-run-$id" \
-              || echo "Run $id has no built paths for $CACHE"
+            dir="$RUNNER_TEMP/nix-store-in/$i-run-$id"
+            # Downloads sometimes fail with server errors, so retry them.
+            for attempt in 1 2 3 4 5; do
+              rm -rf "$dir"
+              if output=$(gh run download "$id" -R "$GITHUB_REPOSITORY" -p "nix-store-$CACHE-*" -D "$dir" 2>&1); then
+                break
+              elif [[ $output == *"no valid artifacts found"* ]]; then
+                echo "Run $id has no built paths for $CACHE"
+                break
+              fi
+              echo "$output"
+              if [ "$attempt" = 5 ]; then
+                exit 1
+              fi
+              sleep 30
+            done
           done
 
       - name: Download the paths built by previous stages
