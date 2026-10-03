@@ -90,19 +90,17 @@ stdenv.mkDerivation (finalAttrs: {
       url = "https://github.com/swiftlang/swift-package-manager/commit/e1910f814cc1be40c709c3987a29488b9bee2f92.patch?full_index=1";
       hash = "sha256-4Ew/cKlk+Zn8cIQvh0jQy4Fz+xGYBYwch4+SBu1nKpI=";
     })
-    # SwiftPM looks for `swiftpm-testing-helper` next to the toolchain. Look for it in $out as well.
-    ./patches/0012-find-swiftpm-testing-helper-in-store.patch
-    # The CMake build doesn’t build `swiftpm-testing-helper`, which `swift test` requires on Darwin.
-    # Build it the same way `Package.swift` does (only on Darwin).
-    # See https://github.com/swiftlang/swift-package-manager/issues/10600.
-    ./patches/0013-build-swiftpm-testing-helper-with-cmake.patch
     # SwiftPM uses XCTest.framework from Xcode to determine the deployment target of test targets on macOS.
     # It isn’t available in nixpkgs, so use the nixpkgs deployment target instead of macOS 10.13, which is too old
     # for Swift Testing.
-    ./patches/0014-use-nixpkgs-deployment-target-for-test-targets.patch
+    ./patches/0012-use-nixpkgs-deployment-target-for-test-targets.patch
     # The CMake build doesn’t add rpaths to the back-deployed libraries (such as `libswiftCompatibilitySpan.dylib`)
     # to executables like SwiftPM does when building itself, so SwiftPM fails to run on macOS 15 and older.
-    ./patches/0015-add-back-deployment-rpaths-with-cmake.patch
+    ./patches/0013-add-back-deployment-rpaths-with-cmake.patch
+    # swift-corelibs-xctest requires test products to be executables, so build and run them like on Linux on Darwin.
+    # This makes XCTest work on Darwin. Swift Testing uses the same executables, so `swiftpm-testing-helper` (which
+    # loads test bundles) isn’t needed.
+    ./patches/0014-build-and-run-tests-like-on-linux-on-darwin.patch
   ];
 
   postPatch = ''
