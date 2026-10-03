@@ -172,6 +172,7 @@ stdenv.mkDerivation (finalAttrs: {
       # symlinks. Copy them, so it uses this toolchain (which includes the stdlib) instead of `swiftc`.
       for f in \
         "$out/lib/sourcekitd.framework/Versions/A/sourcekitd" \
+        "$out/lib/sourcekitdInProc.framework/Versions/A/sourcekitdInProc" \
         "$out/lib/sourcekitd.framework/Versions/A/XPCServices/SourceKitService.xpc/Contents/MacOS/SourceKitService"
       do
         if [ -L "$f" ]; then
