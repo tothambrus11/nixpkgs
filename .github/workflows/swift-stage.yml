@@ -22,8 +22,8 @@ on:
         description: Names of the derivations to build from the closure of the tests (builds the tests if empty)
         default: ""
         type: string
-      reuse-run-id:
-        description: ID of a previous run whose built paths are reused
+      reuse-run-ids:
+        description: IDs of previous runs whose built paths are reused, from oldest to newest
         default: ""
         type: string
 
@@ -58,22 +58,27 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost
           df -h /
 
+      - name: Download the paths built by previous runs
+        if: inputs.reuse-run-ids != ''
+        env:
+          CACHE: ${{ inputs.cache }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_IDS: ${{ inputs.reuse-run-ids }}
+        run: |
+          i=0
+          for id in $RUN_IDS; do
+            i=$((i + 1))
+            gh run download "$id" -R "$GITHUB_REPOSITORY" -p "nix-store-$CACHE-*" -D "$RUNNER_TEMP/nix-store-in/$i-run-$id" \
+              || echo "Run $id has no built paths for $CACHE"
+          done
+
       - name: Download the paths built by previous stages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: nix-store-${{ inputs.cache }}-*
-          path: ${{ runner.temp }}/nix-store-in
+          # Imported after the paths of previous runs.
+          path: ${{ runner.temp }}/nix-store-in/9-current
           merge-multiple: true
-
-      - name: Download the paths built by a previous run
-        if: inputs.reuse-run-id != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: nix-store-${{ inputs.cache }}-*
-          path: ${{ runner.temp }}/nix-store-in
-          merge-multiple: true
-          run-id: ${{ inputs.reuse-run-id }}
-          github-token: ${{ github.token }}
 
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
@@ -84,9 +89,9 @@ jobs:
 
       - name: Import the paths built by previous stages
         run: |
-          shopt -s nullglob
-          # Stages are imported in order because later stages reference the paths of earlier ones.
-          for export in "$RUNNER_TEMP"/nix-store-in/*.nar; do
+          mkdir -p "$RUNNER_TEMP/nix-store-in"
+          # Runs and their stages are imported in order because later ones reference the paths of earlier ones.
+          find "$RUNNER_TEMP/nix-store-in" -name '*.nar' | sort | while IFS= read -r export; do
             echo "Importing $export"
             # Paths that were not built by a stage are available from cache.nixos.org.
             references=$(cat "${export%.nar}.references")
