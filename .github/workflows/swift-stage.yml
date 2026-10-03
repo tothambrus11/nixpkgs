@@ -39,7 +39,8 @@ defaults:
 
 env:
   TESTS: >-
-    swiftPackages.swiftpm.tests.swift-testing-helper
+    swiftPackages.swiftpm.tests.swift-test
+    swiftPackages.swift.tests.swift-testing
     swiftPackages.sourcekit-lsp.tests.semantic-functionality
 
 jobs:
@@ -109,7 +110,7 @@ jobs:
           tests=$TESTS
           if [ "$RUNNER_OS" = macOS ]; then
             # The SourceKit-LSP test does not support Darwin. It is run outside of the Nix sandbox instead.
-            tests=swiftPackages.swiftpm.tests.swift-testing-helper
+            tests=${TESTS/swiftPackages.sourcekit-lsp.tests.semantic-functionality/}
           fi
           drvs=()
           for attr in $tests; do
@@ -156,25 +157,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Check swiftpm-testing-helper
-        if: ${{ !cancelled() && inputs.derivations == '' }}
-        run: |
-          swiftpm=$(nix-build -A swiftPackages.swiftpm --no-out-link)
-          if [ "$RUNNER_OS" = macOS ]; then
-            test -x "$swiftpm/libexec/swift/pm/swiftpm-testing-helper"
-            otool -l "$swiftpm/bin/swift-build" | grep -A2 LC_RPATH
-          fi
-
       - name: Run swift test (outside the Nix sandbox)
         if: ${{ !cancelled() && inputs.derivations == '' }}
-        working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-testing-helper/src
+        working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-test/src
         env:
           # `nix-shell` gets `bashInteractive` from `<nixpkgs>`. Without it, it falls back to the system Bash,
           # which is too old on macOS.
           NIX_PATH: nixpkgs=${{ github.workspace }}
         run: |
-          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-testing-helper \
-            --run 'TERM=dumb swift test --disable-xctest' 2>&1 | tee "$RUNNER_TEMP/test.log"
+          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-test \
+            --run 'TERM=dumb swift test' 2>&1 | tee "$RUNNER_TEMP/test.log"
+          grep -q 'Executed 1 test, with 0 failures' "$RUNNER_TEMP/test.log"
           grep -q 'Test run with 1 test .*passed' "$RUNNER_TEMP/test.log"
 
       - name: Run the SourceKit-LSP test (outside the Nix sandbox)
