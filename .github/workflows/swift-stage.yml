@@ -106,8 +106,13 @@ jobs:
         env:
           DERIVATIONS: ${{ inputs.derivations }}
         run: |
+          tests=$TESTS
+          if [ "$RUNNER_OS" = macOS ]; then
+            # The SourceKit-LSP test does not support Darwin. It is run outside of the Nix sandbox instead.
+            tests=swiftPackages.swiftpm.tests.swift-testing-helper
+          fi
           drvs=()
-          for attr in $TESTS; do
+          for attr in $tests; do
             drvs+=("$(nix-instantiate -A "$attr")")
           done
           if [ -n "$DERIVATIONS" ]; then
@@ -180,5 +185,5 @@ jobs:
           test=pkgs/development/compilers/swift/by-name/so/sourcekit-lsp/tests/semantic-functionality
           cp -R "$test/src" "$RUNNER_TEMP/sourcekit-lsp-test"
           chmod -R u+w "$RUNNER_TEMP/sourcekit-lsp-test"
-          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.sourcekit-lsp.tests.semantic-functionality \
+          nix-shell -p "with import $GITHUB_WORKSPACE {}; [ swiftPackages.swift swiftPackages.swiftpm swiftPackages.sourcekit-lsp python3 ]" \
             --run "cd '$RUNNER_TEMP/sourcekit-lsp-test' && python3 '$GITHUB_WORKSPACE/$test/test.py' ."

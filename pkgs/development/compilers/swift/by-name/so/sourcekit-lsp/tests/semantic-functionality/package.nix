@@ -48,5 +48,11 @@ stdenv.mkDerivation {
 
   __structuredAttrs = true;
 
-  meta.timeout = 3600;
+  meta = {
+    timeout = 3600;
+    badPlatforms = [
+      # SourceKit runs as an XPC service on Darwin, which cannot be launched from a Nix build.
+      lib.systems.inspect.patterns.isDarwin
+    ];
+  };
 }
