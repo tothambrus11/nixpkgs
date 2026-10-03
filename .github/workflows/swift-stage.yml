@@ -75,7 +75,7 @@ jobs:
               rm -rf "$dir"
               if output=$(gh run download "$id" -R "$GITHUB_REPOSITORY" -p "nix-store-$CACHE-*" -D "$dir" 2>&1); then
                 break
-              elif [[ $output == *"no valid artifacts found"* ]]; then
+              elif [[ $output == *"no valid artifacts found"* || $output == *"no artifact matches"* ]]; then
                 echo "Run $id has no built paths for $CACHE"
                 break
               fi
