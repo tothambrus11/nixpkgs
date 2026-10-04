@@ -87,11 +87,6 @@ stdenv.mkDerivation (finalAttrs: {
     })
     # SwiftPM tries to find Clang via `CC`, but that can be GCC on Linux, which doesn’t actually work with SwiftPM.
     ./patches/0011-Always-find-Clang-in-the-toolchain.patch
-    # Build missing `swift-package-collection` and `swift-package-registry` binaries.
-    (fetchpatch2 {
-      url = "https://github.com/swiftlang/swift-package-manager/commit/e1910f814cc1be40c709c3987a29488b9bee2f92.patch?full_index=1";
-      hash = "sha256-4Ew/cKlk+Zn8cIQvh0jQy4Fz+xGYBYwch4+SBu1nKpI=";
-    })
     # The CMake build doesn’t add rpaths to the back-deployed libraries (such as `libswiftCompatibilitySpan.dylib`)
     # to executables like SwiftPM does when building itself, so SwiftPM fails to run on macOS 15 and older.
     ./patches/0012-add-back-deployment-rpaths-with-cmake.patch
@@ -116,9 +111,10 @@ stdenv.mkDerivation (finalAttrs: {
   + lib.optionalString stdenv.hostPlatform.isDarwin ''
     # Use the nixpkgs deployment target as the oldest supported version of macOS, which is the deployment target of
     # packages (and test targets, which use the deployment target of XCTest.framework from Xcode otherwise) that don’t
-    # require a newer one. The default (macOS 10.13) is too old for Swift Testing and the libraries in nixpkgs.
-    substituteInPlace Sources/PackageModel/Platform.swift \
-      --replace-fail 'name: "macos", oldestSupportedVersion: "10.13"' "name: \"macos\", oldestSupportedVersion: \"$MACOSX_DEPLOYMENT_TARGET\""
+    # require a newer one. The default (e.g., macOS 12.0 in Swift 6.4) is too old for the libraries in nixpkgs.
+    sed -i -E 's/(name: "macos", oldestSupportedVersion: )"[0-9.]+"/\1"'"$MACOSX_DEPLOYMENT_TARGET"'"/' \
+      Sources/PackageModel/Platform.swift
+    grep -qF "name: \"macos\", oldestSupportedVersion: \"$MACOSX_DEPLOYMENT_TARGET\"" Sources/PackageModel/Platform.swift
   '';
 
   strictDeps = true;

@@ -17,10 +17,11 @@ Swift Testing-based tests run the same executable.
  Sources/Build/BuildPlan/BuildPlan+Test.swift  |  4 ++--
  Sources/Build/TestObservation.swift           | 10 ++++-----
  Sources/Commands/SwiftTestCommand.swift       | 21 -------------------
+ .../Commands/Utilities/TestingSupport.swift   |  4 ++--
  Sources/PackageModel/SwiftSDKs/SwiftSDK.swift |  7 +++----
  .../BuildParameters+Testing.swift             |  3 ++-
  .../BuildParameters/BuildParameters.swift     |  2 +-
- 7 files changed, 16 insertions(+), 37 deletions(-)
+ 8 files changed, 18 insertions(+), 39 deletions(-)
 
 diff --git a/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift b/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
 index 33eb6f4..8d69e96 100644
@@ -40,10 +41,10 @@ index 33eb6f4..8d69e96 100644
              testInputs = [testBundleInfoPlistPath]
  
 diff --git a/Sources/Build/BuildPlan/BuildPlan+Test.swift b/Sources/Build/BuildPlan/BuildPlan+Test.swift
-index 545ecb2..ba27cde 100644
+index 5b835b4..f400ab2 100644
 --- a/Sources/Build/BuildPlan/BuildPlan+Test.swift
 +++ b/Sources/Build/BuildPlan/BuildPlan+Test.swift
-@@ -188,7 +188,7 @@ extension BuildPlan {
+@@ -190,7 +190,7 @@ extension BuildPlan {
              let swiftTargetDependencies: [Module.Dependency]
              let resolvedTargetDependencies: [ResolvedModule.Dependency]
  
@@ -52,7 +53,7 @@ index 545ecb2..ba27cde 100644
                  discoveryTargets = nil
                  swiftTargetDependencies = []
                  resolvedTargetDependencies = []
-@@ -198,7 +198,7 @@ extension BuildPlan {
+@@ -200,7 +200,7 @@ extension BuildPlan {
                  resolvedTargetDependencies = [.module(discoveryTargets!.resolved, conditions: [])]
              }
  
@@ -62,7 +63,7 @@ index 545ecb2..ba27cde 100644
                      if isEntryPointPathSpecifiedExplicitly {
                          // Allow using the explicitly-specified test entry point target, but still perform test discovery and thus declare a dependency on the discovery modules.
 diff --git a/Sources/Build/TestObservation.swift b/Sources/Build/TestObservation.swift
-index bef8ef9..f361dae 100644
+index ce0cf3b..4501bd0 100644
 --- a/Sources/Build/TestObservation.swift
 +++ b/Sources/Build/TestObservation.swift
 @@ -69,7 +69,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
@@ -111,10 +112,10 @@ index bef8ef9..f361dae 100644
              init(_ location: XCTSourceCodeLocation) {
                  self.init(
 diff --git a/Sources/Commands/SwiftTestCommand.swift b/Sources/Commands/SwiftTestCommand.swift
-index c2ae2ad..4c313d3 100644
+index 19d3cff..ab74d16 100644
 --- a/Sources/Commands/SwiftTestCommand.swift
 +++ b/Sources/Commands/SwiftTestCommand.swift
-@@ -289,8 +289,6 @@ public struct SwiftTestCommand: AsyncSwiftCommand {
+@@ -352,8 +352,6 @@ public struct SwiftTestCommand: AsyncSwiftCommand {
                  } else {
                      throw TestError.xcodeNotInstalled
                  }
@@ -123,7 +124,7 @@ index c2ae2ad..4c313d3 100644
              }
  
              if !self.options.shouldRunInParallel {
-@@ -900,11 +898,7 @@ final class TestRunner {
+@@ -1375,11 +1373,7 @@ final class TestRunner {
              testSpecifier = testSpecifiers.joined(separator: ",")
          }
  
@@ -135,7 +136,7 @@ index c2ae2ad..4c313d3 100644
      }
  
      /// Creates an instance of TestRunner.
-@@ -965,23 +959,8 @@ final class TestRunner {
+@@ -1451,23 +1445,8 @@ final class TestRunner {
              args.append(testPath.relative(to: localFileSystem.currentWorkingDirectory!).pathString)
              args.append(contentsOf: self.additionalArguments)
          } else {
@@ -159,14 +160,36 @@ index c2ae2ad..4c313d3 100644
          }
  
          if library == .swiftTesting {
+diff --git a/Sources/Commands/Utilities/TestingSupport.swift b/Sources/Commands/Utilities/TestingSupport.swift
+index a340cef..3b5de79 100644
+--- a/Sources/Commands/Utilities/TestingSupport.swift
++++ b/Sources/Commands/Utilities/TestingSupport.swift
+@@ -825,7 +825,7 @@ def failbreak(debugger, command, exe_ctx, result, internal_dict):
+     private func getExecutableAndArgs(for target: DebuggableTestSession.Target) throws -> (AbsolutePath, [String]) {
+         switch target.kind {
+         case .xctest(let bundlePath, let binaryPath):
+-            #if os(macOS)
++            #if false // nixpkgs runs test executables directly on Darwin.
+             guard let xctestPath = toolchain.xctestPath else {
+                 throw DebuggerError.xctestNotFoundInToolchain
+             }
+@@ -834,7 +834,7 @@ def failbreak(debugger, command, exe_ctx, result, internal_dict):
+             return (binaryPath, target.additionalArgs)
+             #endif
+         case .swiftTesting(let binaryPath):
+-            #if os(macOS)
++            #if false // nixpkgs runs test executables directly on Darwin.
+             let executable = try toolchain.getSwiftTestingHelper()
+             let args = ["--test-bundle-path", binaryPath.pathString] + target.additionalArgs
+             #else
 diff --git a/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift b/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
-index e0e75b9..6ee52c4 100644
+index ac64479..bf300a8 100644
 --- a/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
 +++ b/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
-@@ -597,10 +597,9 @@ public struct SwiftSDK: Equatable {
-             extraSwiftCFlags.append(contentsOf: sdkPaths.frameworks.flatMap { ["-F", $0.pathString] })
-             extraSwiftCFlags.append(contentsOf: sdkPaths.libraries.flatMap { ["-I", $0.pathString] })
-             extraSwiftCFlags.append(contentsOf: sdkPaths.libraries.flatMap { ["-L", $0.pathString] })
+@@ -608,10 +608,9 @@ public struct SwiftSDK: Equatable {
+             extraSwiftCFlags.append(contentsOf: sdkPaths.buildTimeFrameworkSearchPaths.flatMap { ["-F", $0.pathString] })
+             extraSwiftCFlags.append(contentsOf: sdkPaths.buildTimeLibrarySearchPaths.flatMap { ["-I", $0.pathString] })
+             extraSwiftCFlags.append(contentsOf: sdkPaths.buildTimeLibrarySearchPaths.flatMap { ["-L", $0.pathString] })
 -            xctestSupport = .supported
 -        } catch {
 -            xctestSupport = .unsupported(reason: String(describing: error))
@@ -192,15 +215,15 @@ index 357c7de..2872581 100644
              explicitlySpecifiedPath: testingParameters.explicitlySpecifiedPath
          )
 diff --git a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
-index f82f050..8a872e9 100644
+index d714e97..6092397 100644
 --- a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
 +++ b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
-@@ -315,7 +315,7 @@ public struct BuildParameters: Encodable {
-             fatalError()
-         case .test:
-             let base = "\(product.name).xctest"
+@@ -344,7 +344,7 @@ public struct BuildParameters: Encodable {
+         switch buildSystemKind {
+         case .native, .xcode:
+             let base = "\(name).xctest"
 -            if self.triple.isDarwin() {
 +            if case .loadableBundle = self.testProductStyle {
-                 return try RelativePath(validating: "\(base)/Contents/MacOS/\(product.name)")
+                 return try RelativePath(validating: "\(base)/Contents/MacOS/\(name)")
              } else {
                  return try RelativePath(validating: base)

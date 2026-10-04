@@ -61,6 +61,19 @@ let
             "llvm/gnu-install-dirs.patch" = [ { path = ./patches/21; } ];
           };
         };
+        "6.4.0" = {
+          swiftLlvmVersion = "21.0.0"; # From https://github.com/swiftlang/swift/blob/swift-$swiftVersion-RELEASE/utils/build_swift/build_swift/defaults.py#L51
+          llvmVersion = "21.1.6"; # From https://github.com/swiftlang/llvm-project/blob/swift-$swiftVersion-RELEASE/cmake/Modules/LLVMVersion.cmake
+          llvmPackages = llvmPackages_21;
+          patchOverrides = basePatchOverrides // {
+            # Swift’s LLVM fork needs to use `sys::path::make_absolute` instead of `sys::fs::make_absolute`.
+            "llvm/gnu-install-dirs.patch" = [ { path = ./patches/21; } ];
+            # This is an empty patch because Swift’s LLVM fork already has this change.
+            "llvm/llvm-textapi-separate-arch-name-enum-label.patch" = [ { path = ./patches/21; } ];
+            # This is an empty patch because Swift’s LLVM fork already has this change.
+            "llvm/backport-darwin-triple-parsing.patch" = [ { path = ./patches/6.4; } ];
+          };
+        };
       }
       .${swift_release} or (throw "Unsupported Swift version: ${swift_release}.")
     )

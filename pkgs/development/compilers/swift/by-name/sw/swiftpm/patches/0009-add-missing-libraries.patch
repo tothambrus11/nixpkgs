@@ -9,7 +9,7 @@ Subject: [PATCH 09/11] add-missing-libraries
  2 files changed, 7 insertions(+)
 
 diff --git a/Sources/PackageSigning/CMakeLists.txt b/Sources/PackageSigning/CMakeLists.txt
-index 13a7b8cd5..d00c7d01e 100644
+index 13a7b8c..d00c7d0 100644
 --- a/Sources/PackageSigning/CMakeLists.txt
 +++ b/Sources/PackageSigning/CMakeLists.txt
 @@ -21,6 +21,7 @@ target_link_libraries(PackageSigning PUBLIC
@@ -21,18 +21,18 @@ index 13a7b8cd5..d00c7d01e 100644
    TSCUtility
    X509)
 diff --git a/Sources/SwiftBuildSupport/CMakeLists.txt b/Sources/SwiftBuildSupport/CMakeLists.txt
-index 8b6a335b3..27324e225 100644
+index 7f286e7..57c6066 100644
 --- a/Sources/SwiftBuildSupport/CMakeLists.txt
 +++ b/Sources/SwiftBuildSupport/CMakeLists.txt
-@@ -22,6 +22,7 @@ add_library(SwiftBuildSupport STATIC
+@@ -24,6 +24,7 @@ add_library(SwiftBuildSupport
    SwiftBuildSystem.swift
    SwiftBuildSystemMessageHandler.swift)
  target_link_libraries(SwiftBuildSupport PUBLIC
 +  ArgumentParser
+   Basics
    Build
    DriverSupport
-   TSCBasic
-@@ -29,6 +30,11 @@ target_link_libraries(SwiftBuildSupport PUBLIC
+@@ -32,6 +33,11 @@ target_link_libraries(SwiftBuildSupport PUBLIC
    PackageGraph
    SwiftBuild::SwiftBuild
    SwiftBuild::SWBBuildService
@@ -44,6 +44,3 @@ index 8b6a335b3..27324e225 100644
  )
  
  set_target_properties(SwiftBuildSupport PROPERTIES
--- 
-2.54.0
-
