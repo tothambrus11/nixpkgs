@@ -60,15 +60,15 @@ jobs:
   linux-stage9:
     needs: linux-stage8
     uses: ./.github/workflows/swift-stage.yml
-    with: { runner: ubuntu-latest, cache: linux, stage: 09-swiftc-bootstrap-6.3.3, derivations: "swiftc-bootstrap-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+    with: { runner: ubuntu-latest, cache: linux, stage: 09-swiftc-bootstrap-6.4.0, derivations: "swiftc-bootstrap-6.4.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   linux-stage10:
     needs: linux-stage9
     uses: ./.github/workflows/swift-stage.yml
-    with: { runner: ubuntu-latest, cache: linux, stage: 10-swiftc-6.3.3, derivations: "swiftc-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+    with: { runner: ubuntu-latest, cache: linux, stage: 10-swiftc-6.4.0, derivations: "swiftc-6.4.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   linux-stage11:
     needs: linux-stage10
     uses: ./.github/workflows/swift-stage.yml
-    with: { runner: ubuntu-latest, cache: linux, stage: 11-stdlib-6.3.3, derivations: "stdlib-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+    with: { runner: ubuntu-latest, cache: linux, stage: 11-stdlib-6.4.0, derivations: "stdlib-6.4.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   linux-stage12:
     needs: linux-stage11
     uses: ./.github/workflows/swift-stage.yml
@@ -112,15 +112,15 @@ jobs:
   darwin-stage9:
     needs: darwin-stage8
     uses: ./.github/workflows/swift-stage.yml
-    with: { runner: macos-15, cache: darwin, stage: 09-swiftc-bootstrap-6.3.3, derivations: "swiftc-bootstrap-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+    with: { runner: macos-15, cache: darwin, stage: 09-swiftc-bootstrap-6.4.0, derivations: "swiftc-bootstrap-6.4.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   darwin-stage10:
     needs: darwin-stage9
     uses: ./.github/workflows/swift-stage.yml
-    with: { runner: macos-15, cache: darwin, stage: 10-swiftc-6.3.3, derivations: "swiftc-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+    with: { runner: macos-15, cache: darwin, stage: 10-swiftc-6.4.0, derivations: "swiftc-6.4.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   darwin-stage11:
     needs: darwin-stage10
     uses: ./.github/workflows/swift-stage.yml
-    with: { runner: macos-15, cache: darwin, stage: 11-stdlib-6.3.3, derivations: "stdlib-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+    with: { runner: macos-15, cache: darwin, stage: 11-stdlib-6.4.0, derivations: "stdlib-6.4.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   darwin-stage12:
     needs: darwin-stage11
     uses: ./.github/workflows/swift-stage.yml
