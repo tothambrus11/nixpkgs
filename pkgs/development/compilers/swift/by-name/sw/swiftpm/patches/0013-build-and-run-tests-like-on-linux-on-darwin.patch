@@ -6,17 +6,19 @@ Subject: [PATCH 13/13] Build and run tests like on Linux on Darwin
 nixpkgs uses swift-corelibs-xctest on Darwin because XCTest.framework
 from Xcode is not available. Like on Linux, it requires test products to
 be executables with a generated entry point instead of bundles that are
-loaded by the `xctest` tool from Xcode.
+loaded by the `xctest` tool from Xcode, and it does not provide the
+XCTest APIs that are only available on Darwin.
 
 Build test products as executables on Darwin as well, and run them
 directly like on Linux. This allows XCTest-based tests to run on Darwin.
 Swift Testing-based tests run the same executable.
 ---
  Sources/Build/BuildPlan/BuildPlan+Test.swift  |  4 ++--
+ Sources/Build/TestObservation.swift           | 10 ++++-----
  Sources/Commands/SwiftTestCommand.swift       | 21 -------------------
  Sources/PackageModel/SwiftSDKs/SwiftSDK.swift |  7 +++----
  .../BuildParameters+Testing.swift             |  3 ++-
- 4 files changed, 7 insertions(+), 28 deletions(-)
+ 5 files changed, 12 insertions(+), 33 deletions(-)
 
 diff --git a/Sources/Build/BuildPlan/BuildPlan+Test.swift b/Sources/Build/BuildPlan/BuildPlan+Test.swift
 index 545ecb2..ba27cde 100644
@@ -40,6 +42,55 @@ index 545ecb2..ba27cde 100644
                  if isEntryPointPathSpecifiedExplicitly || explicitlyEnabledDiscovery {
                      if isEntryPointPathSpecifiedExplicitly {
                          // Allow using the explicitly-specified test entry point target, but still perform test discovery and thus declare a dependency on the discovery modules.
+diff --git a/Sources/Build/TestObservation.swift b/Sources/Build/TestObservation.swift
+index bef8ef9..f361dae 100644
+--- a/Sources/Build/TestObservation.swift
++++ b/Sources/Build/TestObservation.swift
+@@ -69,7 +69,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+                 write(record: TestEventRecord(caseEvent: record))
+             }
+ 
+-            #if canImport(Darwin)
++            #if false
+             public func testCase(_ testCase: XCTestCase, didRecord issue: XCTIssue) {
+                 let record = TestCaseFailureRecord(testCase: .init(testCase), issue: .init(issue), failureKind: .unexpected)
+                 write(record: TestEventRecord(caseFailure: record))
+@@ -92,7 +92,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+                 write(record: TestEventRecord(caseEvent: record))
+             }
+ 
+-            #if canImport(Darwin)
++            #if false
+             public func testSuite(_ testSuite: XCTestSuite, didRecord issue: XCTIssue) {
+                 let record = TestSuiteFailureRecord(suite: .init(testSuite), issue: .init(issue), failureKind: .unexpected)
+                 write(record: TestEventRecord(suiteFailure: record))
+@@ -407,7 +407,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+ 
+         import XCTest
+ 
+-        #if canImport(Darwin) // XCTAttachment is unavailable in swift-corelibs-xctest.
++        #if false // XCTAttachment is unavailable in swift-corelibs-xctest.
+         extension TestAttachment {
+             init(_ attachment: XCTAttachment) {
+                 self.init(
+@@ -440,7 +440,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+             }
+         }
+ 
+-        #if canImport(Darwin) // XCTIssue is unavailable in swift-corelibs-xctest.
++        #if false // XCTIssue is unavailable in swift-corelibs-xctest.
+         extension TestIssue {
+             init(_ issue: XCTIssue) {
+                 self.init(
+@@ -469,7 +469,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+         }
+         #endif
+ 
+-        #if canImport(Darwin) // XCTSourceCodeLocation/XCTSourceCodeContext/XCTSourceCodeFrame/XCTSourceCodeSymbolInfo is unavailable in swift-corelibs-xctest.
++        #if false // XCTSourceCodeLocation/XCTSourceCodeContext/XCTSourceCodeFrame/XCTSourceCodeSymbolInfo is unavailable in swift-corelibs-xctest.
+         extension TestLocation {
+             init(_ location: XCTSourceCodeLocation) {
+                 self.init(
 diff --git a/Sources/Commands/SwiftTestCommand.swift b/Sources/Commands/SwiftTestCommand.swift
 index c2ae2ad..4c313d3 100644
 --- a/Sources/Commands/SwiftTestCommand.swift
