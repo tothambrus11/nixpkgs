@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Ambrus Toth <palpista11@gmail.com>
 Date: Thu, 1 Oct 2026 11:36:24 +0200
-Subject: [PATCH 13/14] Add rpaths to back-deployed libraries to executables with
+Subject: [PATCH 12/13] Add rpaths to back-deployed libraries to executables with
  CMake
 
 When SwiftPM builds itself, it adds rpaths to the back-deployed

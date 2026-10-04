@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Ambrus Toth <palpista11@gmail.com>
 Date: Sat, 3 Oct 2026 23:31:05 +0200
-Subject: [PATCH 14/14] Build and run tests like on Linux on Darwin
+Subject: [PATCH 13/13] Build and run tests like on Linux on Darwin
 
 nixpkgs uses swift-corelibs-xctest on Darwin because XCTest.framework
 from Xcode is not available. Like on Linux, it requires test products to
