@@ -194,3 +194,16 @@ jobs:
           chmod -R u+w "$RUNNER_TEMP/sourcekit-lsp-test"
           nix-shell -p "with import $GITHUB_WORKSPACE {}; [ swiftPackages.swift swiftPackages.swiftpm swiftPackages.sourcekit-lsp python3 ]" \
             --run "cd '$RUNNER_TEMP/sourcekit-lsp-test' && python3 '$GITHUB_WORKSPACE/$test/test.py' ."
+
+      - name: Build and test Archivist (outside the Nix sandbox)
+        if: ${{ !cancelled() && inputs.derivations == '' }}
+        env:
+          NIX_PATH: nixpkgs=${{ github.workspace }}
+        run: |
+          git clone --depth 1 https://github.com/tothambrus11/Archivist "$RUNNER_TEMP/Archivist"
+          cd "$RUNNER_TEMP/Archivist"
+          for config in debug release; do
+            echo "::group::swift test -c $config"
+            nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-test --run "TERM=dumb swift test -c $config"
+            echo "::endgroup::"
+          done
