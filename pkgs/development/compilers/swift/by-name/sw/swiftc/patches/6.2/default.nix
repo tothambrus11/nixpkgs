@@ -11,6 +11,9 @@
   # ClangImporter needs help finding the location of libc and libc++ (and using it).
   ./0001-Read-C-and-C-stdlib-flags-from-the-wrapped-compiler.patch
   ./0002-Use-Nixpkgs-C-and-C-stdlib-paths-in-ClangImporter.patch
+  # Find `clang` relative to the toolchain instead of the main executable, so libc is also found when the compiler
+  # is used in-process by other programs (e.g., SourceKit in `sourcekit-lsp`).
+  ./0011-Find-Clang-relative-to-the-toolchain-when-reading-Nix-flags.patch
   # Backport linking against an external swift-cmark.
   # From https://github.com/swiftlang/swift/pull/70791.
   ./0003-cmark-build-revamp.patch

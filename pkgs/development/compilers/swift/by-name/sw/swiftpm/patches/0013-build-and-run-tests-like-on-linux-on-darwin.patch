@@ -1,0 +1,206 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Sat, 3 Oct 2026 23:31:05 +0200
+Subject: [PATCH 13/13] Build and run tests like on Linux on Darwin
+
+nixpkgs uses swift-corelibs-xctest on Darwin because XCTest.framework
+from Xcode is not available. Like on Linux, it requires test products to
+be executables with a generated entry point instead of bundles that are
+loaded by the `xctest` tool from Xcode, and it does not provide the
+XCTest APIs that are only available on Darwin.
+
+Build test products as executables on Darwin as well, and run them
+directly like on Linux. This allows XCTest-based tests to run on Darwin.
+Swift Testing-based tests run the same executable.
+---
+ .../LLBuildManifestBuilder+Product.swift      |  6 +++---
+ Sources/Build/BuildPlan/BuildPlan+Test.swift  |  4 ++--
+ Sources/Build/TestObservation.swift           | 10 ++++-----
+ Sources/Commands/SwiftTestCommand.swift       | 21 -------------------
+ Sources/PackageModel/SwiftSDKs/SwiftSDK.swift |  7 +++----
+ .../BuildParameters+Testing.swift             |  3 ++-
+ .../BuildParameters/BuildParameters.swift     |  2 +-
+ 7 files changed, 16 insertions(+), 37 deletions(-)
+
+diff --git a/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift b/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
+index 33eb6f4..8d69e96 100644
+--- a/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
++++ b/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
+@@ -25,9 +25,9 @@ extension LLBuildManifestBuilder {
+ 
+         // Add dependency on Info.plist generation on Darwin platforms.
+         let testInputs: [AbsolutePath]
+-        if buildProduct.product.type == .test
+-            && buildProduct.buildParameters.triple.isDarwin()
+-            && buildProduct.buildParameters.testingParameters.experimentalTestOutput {
++        if buildProduct.product.type == .test,
++            case .loadableBundle = buildProduct.buildParameters.testProductStyle,
++            buildProduct.buildParameters.testingParameters.experimentalTestOutput {
+             let testBundleInfoPlistPath = try buildProduct.binaryPath.parentDirectory.parentDirectory.appending(component: "Info.plist")
+             testInputs = [testBundleInfoPlistPath]
+ 
+diff --git a/Sources/Build/BuildPlan/BuildPlan+Test.swift b/Sources/Build/BuildPlan/BuildPlan+Test.swift
+index 545ecb2..ba27cde 100644
+--- a/Sources/Build/BuildPlan/BuildPlan+Test.swift
++++ b/Sources/Build/BuildPlan/BuildPlan+Test.swift
+@@ -188,7 +188,7 @@ extension BuildPlan {
+             let swiftTargetDependencies: [Module.Dependency]
+             let resolvedTargetDependencies: [ResolvedModule.Dependency]
+ 
+-            if destinationBuildParameters.triple.isDarwin() {
++            if case .loadableBundle = destinationBuildParameters.testProductStyle {
+                 discoveryTargets = nil
+                 swiftTargetDependencies = []
+                 resolvedTargetDependencies = []
+@@ -198,7 +198,7 @@ extension BuildPlan {
+                 resolvedTargetDependencies = [.module(discoveryTargets!.resolved, conditions: [])]
+             }
+ 
+-            if !destinationBuildParameters.triple.isDarwin(), let entryPointResolvedTarget = testProduct.testEntryPointModule {
++            if case .entryPointExecutable = destinationBuildParameters.testProductStyle, let entryPointResolvedTarget = testProduct.testEntryPointModule {
+                 if isEntryPointPathSpecifiedExplicitly || explicitlyEnabledDiscovery {
+                     if isEntryPointPathSpecifiedExplicitly {
+                         // Allow using the explicitly-specified test entry point target, but still perform test discovery and thus declare a dependency on the discovery modules.
+diff --git a/Sources/Build/TestObservation.swift b/Sources/Build/TestObservation.swift
+index bef8ef9..f361dae 100644
+--- a/Sources/Build/TestObservation.swift
++++ b/Sources/Build/TestObservation.swift
+@@ -69,7 +69,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+                 write(record: TestEventRecord(caseEvent: record))
+             }
+ 
+-            #if canImport(Darwin)
++            #if false
+             public func testCase(_ testCase: XCTestCase, didRecord issue: XCTIssue) {
+                 let record = TestCaseFailureRecord(testCase: .init(testCase), issue: .init(issue), failureKind: .unexpected)
+                 write(record: TestEventRecord(caseFailure: record))
+@@ -92,7 +92,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+                 write(record: TestEventRecord(caseEvent: record))
+             }
+ 
+-            #if canImport(Darwin)
++            #if false
+             public func testSuite(_ testSuite: XCTestSuite, didRecord issue: XCTIssue) {
+                 let record = TestSuiteFailureRecord(suite: .init(testSuite), issue: .init(issue), failureKind: .unexpected)
+                 write(record: TestEventRecord(suiteFailure: record))
+@@ -407,7 +407,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+ 
+         import XCTest
+ 
+-        #if canImport(Darwin) // XCTAttachment is unavailable in swift-corelibs-xctest.
++        #if false // XCTAttachment is unavailable in swift-corelibs-xctest.
+         extension TestAttachment {
+             init(_ attachment: XCTAttachment) {
+                 self.init(
+@@ -440,7 +440,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+             }
+         }
+ 
+-        #if canImport(Darwin) // XCTIssue is unavailable in swift-corelibs-xctest.
++        #if false // XCTIssue is unavailable in swift-corelibs-xctest.
+         extension TestIssue {
+             init(_ issue: XCTIssue) {
+                 self.init(
+@@ -469,7 +469,7 @@ public func generateTestObservationCode(buildParameters: BuildParameters) -> Str
+         }
+         #endif
+ 
+-        #if canImport(Darwin) // XCTSourceCodeLocation/XCTSourceCodeContext/XCTSourceCodeFrame/XCTSourceCodeSymbolInfo is unavailable in swift-corelibs-xctest.
++        #if false // XCTSourceCodeLocation/XCTSourceCodeContext/XCTSourceCodeFrame/XCTSourceCodeSymbolInfo is unavailable in swift-corelibs-xctest.
+         extension TestLocation {
+             init(_ location: XCTSourceCodeLocation) {
+                 self.init(
+diff --git a/Sources/Commands/SwiftTestCommand.swift b/Sources/Commands/SwiftTestCommand.swift
+index c2ae2ad..4c313d3 100644
+--- a/Sources/Commands/SwiftTestCommand.swift
++++ b/Sources/Commands/SwiftTestCommand.swift
+@@ -289,8 +289,6 @@ public struct SwiftTestCommand: AsyncSwiftCommand {
+                 } else {
+                     throw TestError.xcodeNotInstalled
+                 }
+-            } else if toolchain.targetTriple.isDarwin() && toolchain.xctestPath == nil {
+-                throw TestError.xcodeNotInstalled
+             }
+ 
+             if !self.options.shouldRunInParallel {
+@@ -900,11 +898,7 @@ final class TestRunner {
+             testSpecifier = testSpecifiers.joined(separator: ",")
+         }
+ 
+-#if os(macOS)
+-        return ["-XCTest", testSpecifier]
+-#else
+         return [testSpecifier]
+-#endif
+     }
+ 
+     /// Creates an instance of TestRunner.
+@@ -965,23 +959,8 @@ final class TestRunner {
+             args.append(testPath.relative(to: localFileSystem.currentWorkingDirectory!).pathString)
+             args.append(contentsOf: self.additionalArguments)
+         } else {
+-#if os(macOS)
+-            switch library {
+-            case .xctest:
+-                guard let xctestPath = self.toolchain.xctestPath else {
+-                    throw TestError.xcodeNotInstalled
+-                }
+-                args += [xctestPath.pathString]
+-            case .swiftTesting:
+-                let helper = try self.toolchain.getSwiftTestingHelper()
+-                args += [helper.pathString, "--test-bundle-path", testPath.pathString]
+-            }
+-            args += self.additionalArguments
+-            args += [testPath.pathString]
+-    #else
+             args += [testPath.pathString]
+             args += self.additionalArguments
+-    #endif
+         }
+ 
+         if library == .swiftTesting {
+diff --git a/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift b/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
+index e0e75b9..6ee52c4 100644
+--- a/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
++++ b/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
+@@ -597,10 +597,9 @@ public struct SwiftSDK: Equatable {
+             extraSwiftCFlags.append(contentsOf: sdkPaths.frameworks.flatMap { ["-F", $0.pathString] })
+             extraSwiftCFlags.append(contentsOf: sdkPaths.libraries.flatMap { ["-I", $0.pathString] })
+             extraSwiftCFlags.append(contentsOf: sdkPaths.libraries.flatMap { ["-L", $0.pathString] })
+-            xctestSupport = .supported
+-        } catch {
+-            xctestSupport = .unsupported(reason: String(describing: error))
+-        }
++        } catch {}
++        // nixpkgs uses swift-corelibs-xctest on Darwin, which is part of the toolchain.
++        xctestSupport = .supported
+         #else
+         xctestSupport = .supported
+         #endif
+diff --git a/Sources/SPMBuildCore/BuildParameters/BuildParameters+Testing.swift b/Sources/SPMBuildCore/BuildParameters/BuildParameters+Testing.swift
+index 357c7de..2872581 100644
+--- a/Sources/SPMBuildCore/BuildParameters/BuildParameters+Testing.swift
++++ b/Sources/SPMBuildCore/BuildParameters/BuildParameters+Testing.swift
+@@ -119,7 +119,8 @@ extension BuildParameters {
+ 
+     /// The style of test product to produce.
+     public var testProductStyle: TestProductStyle {
+-        return triple.isDarwin() ? .loadableBundle : .entryPointExecutable(
++        // nixpkgs uses swift-corelibs-xctest on Darwin, which works like on other platforms.
++        return .entryPointExecutable(
+             explicitlyEnabledDiscovery: testingParameters.explicitlyEnabledDiscovery,
+             explicitlySpecifiedPath: testingParameters.explicitlySpecifiedPath
+         )
+diff --git a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
+index f82f050..8a872e9 100644
+--- a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
++++ b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
+@@ -315,7 +315,7 @@ public struct BuildParameters: Encodable {
+             fatalError()
+         case .test:
+             let base = "\(product.name).xctest"
+-            if self.triple.isDarwin() {
++            if case .loadableBundle = self.testProductStyle {
+                 return try RelativePath(validating: "\(base)/Contents/MacOS/\(product.name)")
+             } else {
+                 return try RelativePath(validating: base)

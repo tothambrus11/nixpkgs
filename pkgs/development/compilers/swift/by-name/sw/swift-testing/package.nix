@@ -35,7 +35,12 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (swift_sources.swift-testing) hash;
   };
 
-  patches = [ ./patches/0001-gnu-install-dirs.patch ];
+  patches = [
+    ./patches/0001-gnu-install-dirs.patch
+    # The macro plugin is built as an external project, which doesn’t inherit `CMAKE_Swift_COMPILER_TARGET`.
+    # Allow setting its target, so it doesn’t target the OS version of the build machine.
+    ./patches/0002-allow-setting-the-macro-plugin-target.patch
+  ];
 
   postPatch = ''
     # Need to reference $include, so this can’t be substituted by `replaceVars`.
@@ -48,6 +53,8 @@ stdenv.mkDerivation (finalAttrs: {
 
   preConfigure = ''
     appendToVar cmakeFlags -DCMAKE_Swift_COMPILER_TARGET=${stdenv.hostPlatform.swift.triple}
+    # Macros run on the build machine.
+    appendToVar cmakeFlags -DSwiftTesting_MACRO_Swift_COMPILER_TARGET=${stdenv.buildPlatform.swift.triple}
     appendToVar cmakeFlags -DCMAKE_Swift_FLAGS=-module-cache-path\ "$NIX_BUILD_TOP/module-cache"
   '';
 

@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Thu, 1 Oct 2026 11:36:24 +0200
+Subject: [PATCH 12/13] Add rpaths to back-deployed libraries to executables with
+ CMake
+
+When SwiftPM builds itself, it adds rpaths to the back-deployed
+libraries in the toolchain to executables when deploying to older
+versions of macOS (see `ProductBuildDescription.swift`). The CMake
+build does not, so executables fail to load libraries such as
+`libswiftCompatibilitySpan.dylib` on macOS 15 and older.
+---
+ CMakeLists.txt | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 876a088..98e2b12 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -16,6 +16,21 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
+ 
+ project(SwiftPM LANGUAGES C Swift)
+ 
++# When deploying to older versions of macOS, add rpaths to the back-deployed libraries in the toolchain to executables.
++# This mirrors what SwiftPM does in `ProductBuildDescription.swift`.
++if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
++  cmake_path(GET CMAKE_Swift_COMPILER PARENT_PATH SwiftPM_TOOLCHAIN_BIN_DIR)
++  cmake_path(GET SwiftPM_TOOLCHAIN_BIN_DIR PARENT_PATH SwiftPM_TOOLCHAIN_DIR)
++  if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 12)
++    # Back-deployed concurrency libraries
++    add_link_options("$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:SHELL:-Xlinker -rpath -Xlinker ${SwiftPM_TOOLCHAIN_DIR}/lib/swift-5.5/macosx>")
++  endif()
++  if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 26)
++    # Back-deployed Span library
++    add_link_options("$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:SHELL:-Xlinker -rpath -Xlinker ${SwiftPM_TOOLCHAIN_DIR}/lib/swift-6.2/macosx>")
++  endif()
++endif()
++
+ option(BUILD_SHARED_LIBS "Build shared libraries by default" YES)
+ option(FIND_PM_DEPS "Search for all external Package Manager dependencies" YES)
+ 

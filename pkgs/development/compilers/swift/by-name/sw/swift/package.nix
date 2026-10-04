@@ -146,6 +146,8 @@ stdenv.mkDerivation (finalAttrs: {
     # Swift expects to find Clang next to it.
     ln -s ${lib.escapeShellArg (lib.getExe' llvmPackages_upstream.clang "clang")} "$out/bin/clang"
     ln -s ${lib.escapeShellArg (lib.getExe' llvmPackages_upstream.clang "clang++")} "$out/bin/clang++"
+    # SourceKit-LSP requires `clangd` to be part of the toolchain to use it with SwiftPM packages.
+    ln -s ${lib.escapeShellArg (lib.getExe' llvmPackages_upstream.clang-tools "clangd")} "$out/bin/clangd"
 
     # Swift has a separate resource root from Clang, but locates the Clang resource root via subdir or symlink.
     #
@@ -165,7 +167,22 @@ stdenv.mkDerivation (finalAttrs: {
       fi
     done
 
-    # Make sure `swift` and `swiftc` point to `swift-driver` if present.
+    ${lib.optionalString stdenv.hostPlatform.isDarwin ''
+      # SourceKit finds the toolchain relative to the location of its framework and XPC service after resolving
+      # symlinks. Copy them, so it uses this toolchain (which includes the stdlib) instead of `swiftc`.
+      for f in \
+        "$out/lib/sourcekitd.framework/Versions/A/sourcekitd" \
+        "$out/lib/sourcekitdInProc.framework/Versions/A/sourcekitdInProc" \
+        "$out/lib/sourcekitd.framework/Versions/A/XPCServices/SourceKitService.xpc/Contents/MacOS/SourceKitService"
+      do
+        if [ -L "$f" ]; then
+          orig=$(readlink "$f")
+          rm "$f"
+          cp "$orig" "$f"
+        fi
+      done
+
+    ''}# Make sure `swift` and `swiftc` point to `swift-driver` if present.
     if [ -e "$out/bin/swift-driver" ]; then
       for exe in swift swiftc; do
         rm -f "$out/bin/$exe"

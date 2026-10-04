@@ -1,5 +1,6 @@
 {
   lib,
+  callPackage,
   fetchFromGitHub,
   fetchSwiftPMDeps,
   llvmPackages,
@@ -34,12 +35,18 @@ stdenv.mkDerivation (finalAttrs: {
     (replaceVars ./patches/0002-Load-IndexStore-from-the-store.patch {
       libclang = lib.getLib llvmPackages.libclang;
     })
+    # The SourceKit plugins are installed with SourceKit-LSP instead of the toolchain. Find them in $out.
+    ./patches/0003-Find-the-SourceKit-plugins-in-the-store.patch
   ];
 
   # The SwiftPM patches can’t be included in the swiftpmDeps FOD because they reference store paths.
   swiftpmPatches = swiftpm.patches;
+  # SwiftPM’s `postPatch` substitutes paths that refer to its own store path (e.g., to find `PackageDescription`).
+  swiftpmPostPatch = swiftpm.postPatch;
 
   postPatch = ''
+    substituteInPlace Sources/ToolchainRegistry/Toolchain.swift --replace-fail '@out@' "$out"
+
     packagesPath=$(readlink -f Packages)
 
     rm Packages
@@ -54,6 +61,10 @@ stdenv.mkDerivation (finalAttrs: {
         patch -d Packages/swift-package-manager -p1 < "$p"
       fi
     done
+
+    # Run SwiftPM’s `postPatch` with `$out` referring to SwiftPM, so the vendored SwiftPM finds `PackageDescription`
+    # and the other files installed with SwiftPM.
+    (cd Packages/swift-package-manager && out=${lib.escapeShellArg swiftpm} && eval "$swiftpmPostPatch")
   '';
 
   swiftpmDeps = fetchSwiftPMDeps {
@@ -82,6 +93,11 @@ stdenv.mkDerivation (finalAttrs: {
 
   # Tests crash with `*** bit out of range 0 - FD_SETSIZE on fd_set ***: terminated`
   doCheck = false; # !stdenv.hostPlatform.isDarwin;
+
+  passthru.tests = lib.packagesFromDirectoryRecursive {
+    inherit callPackage;
+    directory = ./tests;
+  };
 
   __structuredAttrs = true;
 

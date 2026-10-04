@@ -41,7 +41,12 @@
     #    "llvm-toolchain-dev-tools"
     "license"
     "sdk-overlay"
-    (if stdenv.hostPlatform.isDarwin then "sourcekit-xpc-service" else "sourcekit-inproc")
+    "sourcekit-inproc"
+  ]
+  # SourceKit-LSP uses the XPC service on Darwin. It links against `sourcekitdInProc` when it is installed, which
+  # exports the API that the SourceKit plugins use. Otherwise, the plugins crash when they are loaded by the service.
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ "sourcekit-xpc-service" ]
+  ++ [
     #    "stdlib-experimental"
     "swift-syntax-lib"
     #    "testsuite-tools"

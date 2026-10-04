@@ -1,0 +1,209 @@
+name: Swift stage
+
+# Builds part of the Swift toolchain and passes the paths it built on to the following stages as an artifact.
+# The toolchain takes too long to build in a single job when it is not available from cache.nixos.org.
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: Runner to use
+        required: true
+        type: string
+      cache:
+        description: Name shared by the stages of one platform
+        required: true
+        type: string
+      stage:
+        description: Name of the stage (stages are imported in the order of their names)
+        required: true
+        type: string
+      derivations:
+        description: Names of the derivations to build from the closure of the tests (builds the tests if empty)
+        default: ""
+        type: string
+      reuse-run-ids:
+        description: IDs of previous runs whose built paths are reused, from oldest to newest
+        default: ""
+        type: string
+
+permissions:
+  # Needed to download the artifacts of previous runs.
+  actions: read
+  contents: read
+
+defaults:
+  run:
+    # Enables `pipefail`.
+    shell: bash
+
+env:
+  TESTS: >-
+    swiftPackages.swiftpm.tests.swift-test
+    swiftPackages.swift.tests.swift-testing
+    swiftPackages.sourcekit-lsp.tests.semantic-functionality
+
+jobs:
+  build:
+    name: ${{ inputs.stage }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost
+          df -h /
+
+      - name: Download the paths built by previous runs
+        if: inputs.reuse-run-ids != ''
+        env:
+          CACHE: ${{ inputs.cache }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_IDS: ${{ inputs.reuse-run-ids }}
+        run: |
+          i=0
+          for id in $RUN_IDS; do
+            i=$((i + 1))
+            dir="$RUNNER_TEMP/nix-store-in/$i-run-$id"
+            # Downloads sometimes fail with server errors, so retry them.
+            for attempt in 1 2 3 4 5; do
+              rm -rf "$dir"
+              if output=$(gh run download "$id" -R "$GITHUB_REPOSITORY" -p "nix-store-$CACHE-*" -D "$dir" 2>&1); then
+                break
+              elif [[ $output == *"no valid artifacts found"* || $output == *"no artifact matches"* ]]; then
+                echo "Run $id has no built paths for $CACHE"
+                break
+              fi
+              echo "$output"
+              if [ "$attempt" = 5 ]; then
+                exit 1
+              fi
+              sleep 30
+            done
+          done
+
+      - name: Download the paths built by previous stages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: nix-store-${{ inputs.cache }}-*
+          # Imported after the paths of previous runs.
+          path: ${{ runner.temp }}/nix-store-in/9-current
+          merge-multiple: true
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            # The paths imported from previous stages are not signed.
+            require-sigs = false
+            post-build-hook = ${{ github.workspace }}/.github/swift-ci-record-built-paths.sh
+
+      - name: Import the paths built by previous stages
+        run: |
+          mkdir -p "$RUNNER_TEMP/nix-store-in"
+          # Runs and their stages are imported in order because later ones reference the paths of earlier ones.
+          find "$RUNNER_TEMP/nix-store-in" -name '*.nar' | sort | while IFS= read -r export; do
+            echo "Importing $export"
+            # Paths that were not built by a stage are available from cache.nixos.org.
+            references=$(cat "${export%.nar}.references")
+            if [ -n "$references" ]; then
+              # shellcheck disable=SC2086
+              nix-store --realise $references > /dev/null
+            fi
+            nix-store --import < "$export" > /dev/null
+          done
+
+      - name: Build
+        env:
+          DERIVATIONS: ${{ inputs.derivations }}
+        run: |
+          tests=$TESTS
+          if [ "$RUNNER_OS" = macOS ]; then
+            # The SourceKit-LSP test does not support Darwin. It is run outside of the Nix sandbox instead.
+            tests=${TESTS/swiftPackages.sourcekit-lsp.tests.semantic-functionality/}
+          fi
+          drvs=()
+          for attr in $tests; do
+            drvs+=("$(nix-instantiate -A "$attr")")
+          done
+          if [ -n "$DERIVATIONS" ]; then
+            targets=()
+            for name in $DERIVATIONS; do
+              # `mapfile` is not available in the Bash shipped with macOS.
+              while IFS= read -r drv; do
+                targets+=("$drv")
+              done < <(nix-store --query --requisites "${drvs[@]}" | grep -- "-$name\.drv$")
+            done
+          else
+            targets=("${drvs[@]}")
+          fi
+          printf 'Building %s\n' "${targets[@]}"
+          nix-store --realise --keep-going "${targets[@]}" > /dev/null
+
+      - name: Export the built paths
+        if: ${{ !cancelled() }}
+        env:
+          STAGE: ${{ inputs.stage }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/nix-store-out"
+          if [ -s /tmp/nix-built-paths ]; then
+            built=$(tr ' ' '\n' < /tmp/nix-built-paths | sort -u)
+            # Export the paths in dependency order, so they can be imported in the same order.
+            # shellcheck disable=SC2046,SC2086
+            nix-store --export $(nix-store --query --requisites $built | grep -Fx -f <(echo "$built")) \
+              > "$RUNNER_TEMP/nix-store-out/$STAGE.nar"
+            # Record the dependencies that were not built by this stage, so they can be fetched before importing.
+            # shellcheck disable=SC2086
+            nix-store --query --references $built | sort -u | { grep -Fxv -f <(echo "$built") || true; } \
+              > "$RUNNER_TEMP/nix-store-out/$STAGE.references"
+          fi
+          du -sh "$RUNNER_TEMP/nix-store-out"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: nix-store-${{ inputs.cache }}-${{ inputs.stage }}
+          path: ${{ runner.temp }}/nix-store-out
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Run swift test (outside the Nix sandbox)
+        if: ${{ !cancelled() && inputs.derivations == '' }}
+        working-directory: pkgs/development/compilers/swift/by-name/sw/swiftpm/tests/swift-test/src
+        env:
+          # `nix-shell` gets `bashInteractive` from `<nixpkgs>`. Without it, it falls back to the system Bash,
+          # which is too old on macOS.
+          NIX_PATH: nixpkgs=${{ github.workspace }}
+        run: |
+          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-test \
+            --run 'TERM=dumb swift test' 2>&1 | tee "$RUNNER_TEMP/test.log"
+          grep -q 'Executed 1 test, with 0 failures' "$RUNNER_TEMP/test.log"
+          grep -q 'Test run with 1 test .*passed' "$RUNNER_TEMP/test.log"
+
+      - name: Run the SourceKit-LSP test (outside the Nix sandbox)
+        if: ${{ !cancelled() && inputs.derivations == '' }}
+        env:
+          NIX_PATH: nixpkgs=${{ github.workspace }}
+        run: |
+          test=pkgs/development/compilers/swift/by-name/so/sourcekit-lsp/tests/semantic-functionality
+          cp -R "$test/src" "$RUNNER_TEMP/sourcekit-lsp-test"
+          chmod -R u+w "$RUNNER_TEMP/sourcekit-lsp-test"
+          nix-shell -p "with import $GITHUB_WORKSPACE {}; [ swiftPackages.swift swiftPackages.swiftpm swiftPackages.sourcekit-lsp python3 ]" \
+            --run "cd '$RUNNER_TEMP/sourcekit-lsp-test' && python3 '$GITHUB_WORKSPACE/$test/test.py' ."
+
+      - name: Build and test Archivist (outside the Nix sandbox)
+        if: ${{ !cancelled() && inputs.derivations == '' }}
+        env:
+          NIX_PATH: nixpkgs=${{ github.workspace }}
+        run: |
+          git clone --depth 1 https://github.com/tothambrus11/Archivist "$RUNNER_TEMP/Archivist"
+          cd "$RUNNER_TEMP/Archivist"
+          for config in debug release; do
+            echo "::group::swift test -c $config"
+            nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-test --run "TERM=dumb swift test -c $config"
+            echo "::endgroup::"
+          done

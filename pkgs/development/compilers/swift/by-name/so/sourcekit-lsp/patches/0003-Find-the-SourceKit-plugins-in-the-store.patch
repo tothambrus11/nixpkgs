@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Thu, 1 Oct 2026 13:14:00 +0200
+Subject: [PATCH 3/3] Find the SourceKit plugins in the store
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The SourceKit plugins are installed with SourceKit-LSP instead of the
+toolchain, so SourceKit-LSP fails to find them. Use the plugins from
+SourceKit-LSP’s store path if the toolchain does not provide them.
+---
+ Sources/ToolchainRegistry/Toolchain.swift | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/Sources/ToolchainRegistry/Toolchain.swift b/Sources/ToolchainRegistry/Toolchain.swift
+index bc12d4b..2ecdd6d 100644
+--- a/Sources/ToolchainRegistry/Toolchain.swift
++++ b/Sources/ToolchainRegistry/Toolchain.swift
+@@ -346,6 +346,19 @@ public final class Toolchain: Sendable {
+       return nil
+     }
+ 
++    // The SourceKit plugins are part of SourceKit-LSP, which is installed separately from the toolchain.
++    // Use the plugins from SourceKit-LSP’s store path if the toolchain doesn’t provide them.
++    if sourceKitClientPlugin == nil && sourceKitServicePlugin == nil {
++      let dylibExtension = Platform.current?.dynamicLibraryExtension ?? ".so"
++      let storeLibPath = URL(filePath: "@out@").appending(component: "lib")
++      let clientPluginPath = storeLibPath.appending(component: "libSwiftSourceKitClientPlugin\(dylibExtension)")
++      let servicePluginPath = storeLibPath.appending(component: "libSwiftSourceKitPlugin\(dylibExtension)")
++      if FileManager.default.isFile(at: clientPluginPath) && FileManager.default.isFile(at: servicePluginPath) {
++        sourceKitClientPlugin = clientPluginPath
++        sourceKitServicePlugin = servicePluginPath
++      }
++    }
++
+     self.init(
+       identifier: identifier,
+       displayName: displayName,

@@ -92,6 +92,13 @@ stdenv.mkDerivation (finalAttrs: {
       url = "https://github.com/swiftlang/swift-package-manager/commit/e1910f814cc1be40c709c3987a29488b9bee2f92.patch?full_index=1";
       hash = "sha256-4Ew/cKlk+Zn8cIQvh0jQy4Fz+xGYBYwch4+SBu1nKpI=";
     })
+    # The CMake build doesn’t add rpaths to the back-deployed libraries (such as `libswiftCompatibilitySpan.dylib`)
+    # to executables like SwiftPM does when building itself, so SwiftPM fails to run on macOS 15 and older.
+    ./patches/0012-add-back-deployment-rpaths-with-cmake.patch
+    # swift-corelibs-xctest requires test products to be executables, so build and run them like on Linux on Darwin.
+    # This makes XCTest work on Darwin. Swift Testing uses the same executables, so `swiftpm-testing-helper` (which
+    # loads test bundles) isn’t needed.
+    ./patches/0013-build-and-run-tests-like-on-linux-on-darwin.patch
   ];
 
   postPatch = ''
@@ -105,6 +112,13 @@ stdenv.mkDerivation (finalAttrs: {
     # Set the deployment target when building package manifests to one supported in nixpkgs.
     substituteInPlace Sources/PackageLoading/ManifestLoader.swift \
       --replace-fail '.tripleString(forPlatformVersion: version)' ".tripleString(forPlatformVersion: \"$MACOSX_DEPLOYMENT_TARGET\")"
+  ''
+  + lib.optionalString stdenv.hostPlatform.isDarwin ''
+    # Use the nixpkgs deployment target as the oldest supported version of macOS, which is the deployment target of
+    # packages (and test targets, which use the deployment target of XCTest.framework from Xcode otherwise) that don’t
+    # require a newer one. The default (macOS 10.13) is too old for Swift Testing and the libraries in nixpkgs.
+    substituteInPlace Sources/PackageModel/Platform.swift \
+      --replace-fail 'name: "macos", oldestSupportedVersion: "10.13"' "name: \"macos\", oldestSupportedVersion: \"$MACOSX_DEPLOYMENT_TARGET\""
   '';
 
   strictDeps = true;

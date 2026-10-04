@@ -1,0 +1,135 @@
+name: Swift
+
+# Tests the Swift toolchain:
+# - `swift test` finds `swiftpm-testing-helper` when running Swift Testing tests
+#   (https://github.com/swiftlang/swift-package-manager/issues/10600).
+# - SourceKit-LSP provides semantic functionality without additional configuration.
+#
+# Changes to the Swift compiler require building the whole toolchain, which takes too long for a single job. It is
+# built in stages, which pass the paths they built on to the following stages.
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      reuse-run-ids:
+        description: IDs of previous runs whose built paths are reused instead of building them again, from oldest to newest
+        default: ""
+        type: string
+
+concurrency:
+  group: swift-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  linux-stage1:
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 01-llvm-17.0.0, derivations: "llvm-17.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage2:
+    needs: linux-stage1
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 02-clang-17.0.0, derivations: "clang-17.0.0 compiler-rt-17.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage3:
+    needs: linux-stage2
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 03-swiftc-cxx_bootstrap-6.2.4, derivations: "swiftc-cxx_bootstrap-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage4:
+    needs: linux-stage3
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 04-swiftc-bootstrap-6.2.4, derivations: "swiftc-bootstrap-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage5:
+    needs: linux-stage4
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 05-swiftc-6.2.4, derivations: "swiftc-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage6:
+    needs: linux-stage5
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 06-stdlib-6.2.4, derivations: "stdlib-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage7:
+    needs: linux-stage6
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 07-llvm-21.0.0, derivations: "llvm-21.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage8:
+    needs: linux-stage7
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 08-clang-21.0.0, derivations: "clang-21.0.0 compiler-rt-21.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage9:
+    needs: linux-stage8
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 09-swiftc-bootstrap-6.3.3, derivations: "swiftc-bootstrap-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage10:
+    needs: linux-stage9
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 10-swiftc-6.3.3, derivations: "swiftc-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage11:
+    needs: linux-stage10
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 11-stdlib-6.3.3, derivations: "stdlib-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-stage12:
+    needs: linux-stage11
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 12-lldb-21.0.0, derivations: "lldb-21.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  linux-test:
+    needs: linux-stage12
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: ubuntu-latest, cache: linux, stage: 99-test, reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+
+  darwin-stage1:
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 01-llvm-17.0.0, derivations: "llvm-17.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage2:
+    needs: darwin-stage1
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 02-clang-17.0.0, derivations: "clang-17.0.0 compiler-rt-17.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage3:
+    needs: darwin-stage2
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 03-swiftc-cxx_bootstrap-6.2.4, derivations: "swiftc-cxx_bootstrap-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage4:
+    needs: darwin-stage3
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 04-swiftc-bootstrap-6.2.4, derivations: "swiftc-bootstrap-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage5:
+    needs: darwin-stage4
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 05-swiftc-6.2.4, derivations: "swiftc-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage6:
+    needs: darwin-stage5
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 06-stdlib-6.2.4, derivations: "stdlib-6.2.4", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage7:
+    needs: darwin-stage6
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 07-llvm-21.0.0, derivations: "llvm-21.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage8:
+    needs: darwin-stage7
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 08-clang-21.0.0, derivations: "clang-21.0.0 compiler-rt-21.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage9:
+    needs: darwin-stage8
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 09-swiftc-bootstrap-6.3.3, derivations: "swiftc-bootstrap-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage10:
+    needs: darwin-stage9
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 10-swiftc-6.3.3, derivations: "swiftc-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage11:
+    needs: darwin-stage10
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 11-stdlib-6.3.3, derivations: "stdlib-6.3.3", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-stage12:
+    needs: darwin-stage11
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: macos-15, cache: darwin, stage: 12-lldb-21.0.0, derivations: "lldb-21.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
+  darwin-test:
+    needs: darwin-stage12
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+    uses: ./.github/workflows/swift-stage.yml
+    with: { runner: "${{ matrix.runner }}", cache: darwin, stage: "99-test-${{ matrix.runner }}", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }

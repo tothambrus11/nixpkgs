@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Thu, 1 Oct 2026 12:10:10 +0200
+Subject: [PATCH] Allow setting the target of the macro plugin
+
+The macro plugin is built as an external project, which does not inherit
+`CMAKE_Swift_COMPILER_TARGET`. Without a target, the Swift compiler
+targets the running OS, so a plugin built on macOS 26 fails to load on
+older versions of macOS. Add `SwiftTesting_MACRO_Swift_COMPILER_TARGET`
+to allow setting it like the other `SwiftTesting_MACRO_*` options.
+---
+ Sources/CMakeLists.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Sources/CMakeLists.txt b/Sources/CMakeLists.txt
+index c6575a3..02651ca 100644
+--- a/Sources/CMakeLists.txt
++++ b/Sources/CMakeLists.txt
+@@ -18,6 +18,10 @@ if(SwiftTesting_MACRO STREQUAL "<auto>")
+   if(NOT SwiftTesting_MACRO_Swift_COMPILER)
+     set(SwiftTesting_MACRO_Swift_COMPILER ${CMAKE_Swift_COMPILER})
+   endif()
++  if(SwiftTesting_MACRO_Swift_COMPILER_TARGET)
++    set(SwiftTesting_MACRO_Swift_COMPILER_TARGET_ARG
++      -DCMAKE_Swift_COMPILER_TARGET=${SwiftTesting_MACRO_Swift_COMPILER_TARGET})
++  endif()
+   if(NOT SwiftTesting_MACRO_Swift_FLAGS)
+     set(SwiftTesting_MACRO_Swift_FLAGS ${CMAKE_Swift_FLAGS})
+     set(SwiftTesting_MACRO_SWIFT_FLAGS_RELEASE ${CMAKE_Swift_FLAGS_RELEASE})
+@@ -50,6 +54,7 @@ if(SwiftTesting_MACRO STREQUAL "<auto>")
+     CMAKE_ARGS
+       -DCMAKE_MAKE_PROGRAM=${SwiftTesting_MACRO_MAKE_PROGRAM}
+       -DCMAKE_Swift_COMPILER=${SwiftTesting_MACRO_Swift_COMPILER}
++      ${SwiftTesting_MACRO_Swift_COMPILER_TARGET_ARG}
+       -DCMAKE_Swift_FLAGS=${SwiftTesting_MACRO_Swift_FLAGS}
+       -DCMAKE_Swift_FLAGS_RELEASE=${SwiftTesting_MACRO_Swift_FLAGS_RELEASE}
+       -DCMAKE_Swift_FLAGS_RELWITHDEBINFO=${SwiftTesting_MACRO_Swift_FLAGS_RELWITHDEBINFO}
