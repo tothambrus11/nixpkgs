@@ -114,9 +114,10 @@ stdenv.mkDerivation (finalAttrs: {
   + lib.optionalString stdenv.hostPlatform.isDarwin ''
     # Use the nixpkgs deployment target as the oldest supported version of macOS, which is the deployment target of
     # packages (and test targets, which use the deployment target of XCTest.framework from Xcode otherwise) that don’t
-    # require a newer one. The default (macOS 10.13) is too old for Swift Testing and the libraries in nixpkgs.
-    substituteInPlace Sources/PackageModel/Platform.swift \
-      --replace-fail 'name: "macos", oldestSupportedVersion: "10.13"' "name: \"macos\", oldestSupportedVersion: \"$MACOSX_DEPLOYMENT_TARGET\""
+    # require a newer one. The default (e.g., macOS 10.13 in Swift 6.2) is too old for the libraries in nixpkgs.
+    sed -i -E 's/(name: "macos", oldestSupportedVersion: )"[0-9.]+"/\1"'"$MACOSX_DEPLOYMENT_TARGET"'"/' \
+      Sources/PackageModel/Platform.swift
+    grep -qF "name: \"macos\", oldestSupportedVersion: \"$MACOSX_DEPLOYMENT_TARGET\"" Sources/PackageModel/Platform.swift
   '';
 
   strictDeps = true;
