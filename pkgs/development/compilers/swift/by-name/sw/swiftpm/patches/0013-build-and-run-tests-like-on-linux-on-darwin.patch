@@ -13,13 +13,32 @@ Build test products as executables on Darwin as well, and run them
 directly like on Linux. This allows XCTest-based tests to run on Darwin.
 Swift Testing-based tests run the same executable.
 ---
+ .../LLBuildManifestBuilder+Product.swift      |  6 +++---
  Sources/Build/BuildPlan/BuildPlan+Test.swift  |  4 ++--
  Sources/Build/TestObservation.swift           | 10 ++++-----
  Sources/Commands/SwiftTestCommand.swift       | 21 -------------------
  Sources/PackageModel/SwiftSDKs/SwiftSDK.swift |  7 +++----
  .../BuildParameters+Testing.swift             |  3 ++-
- 5 files changed, 12 insertions(+), 33 deletions(-)
+ .../BuildParameters/BuildParameters.swift     |  2 +-
+ 7 files changed, 16 insertions(+), 37 deletions(-)
 
+diff --git a/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift b/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
+index 33eb6f4..8d69e96 100644
+--- a/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
++++ b/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
+@@ -25,9 +25,9 @@ extension LLBuildManifestBuilder {
+ 
+         // Add dependency on Info.plist generation on Darwin platforms.
+         let testInputs: [AbsolutePath]
+-        if buildProduct.product.type == .test
+-            && buildProduct.buildParameters.triple.isDarwin()
+-            && buildProduct.buildParameters.testingParameters.experimentalTestOutput {
++        if buildProduct.product.type == .test,
++            case .loadableBundle = buildProduct.buildParameters.testProductStyle,
++            buildProduct.buildParameters.testingParameters.experimentalTestOutput {
+             let testBundleInfoPlistPath = try buildProduct.binaryPath.parentDirectory.parentDirectory.appending(component: "Info.plist")
+             testInputs = [testBundleInfoPlistPath]
+ 
 diff --git a/Sources/Build/BuildPlan/BuildPlan+Test.swift b/Sources/Build/BuildPlan/BuildPlan+Test.swift
 index 545ecb2..ba27cde 100644
 --- a/Sources/Build/BuildPlan/BuildPlan+Test.swift
@@ -172,3 +191,16 @@ index 357c7de..2872581 100644
              explicitlyEnabledDiscovery: testingParameters.explicitlyEnabledDiscovery,
              explicitlySpecifiedPath: testingParameters.explicitlySpecifiedPath
          )
+diff --git a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
+index f82f050..8a872e9 100644
+--- a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
++++ b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
+@@ -315,7 +315,7 @@ public struct BuildParameters: Encodable {
+             fatalError()
+         case .test:
+             let base = "\(product.name).xctest"
+-            if self.triple.isDarwin() {
++            if case .loadableBundle = self.testProductStyle {
+                 return try RelativePath(validating: "\(base)/Contents/MacOS/\(product.name)")
+             } else {
+                 return try RelativePath(validating: base)
