@@ -113,12 +113,6 @@
       path = ../18;
     }
   ];
-  "llvm/llvm-textapi-separate-arch-name-enum-label.patch" = [
-    {
-      before = "22";
-      path = ../18;
-    }
-  ];
   "llvm/lit-shell-script-runner-set-dyld-library-path.patch" = [
     {
       after = "22";
