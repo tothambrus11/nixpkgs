@@ -59,8 +59,6 @@ let
           patchOverrides = basePatchOverrides // {
             # Swift’s LLVM fork needs to use `sys::path::make_absolute` instead of `sys::fs::make_absolute`.
             "llvm/gnu-install-dirs.patch" = [ { path = ./patches/21; } ];
-            # This is an empty patch because Swift’s LLVM fork already has this change.
-            "llvm/llvm-textapi-separate-arch-name-enum-label.patch" = [ { path = ./patches/21; } ];
           };
         };
       }
@@ -131,10 +129,17 @@ let
               # Don’t apply the following changes when manpages are built,
               # which nulls out these attrs and sets `doCheck` to false.
               lib.optionalAttrs (old.pname != "llvm-manpages") {
-                patches = (old.patches or [ ]) ++ [
-                  # Ensure the LLVM module cache is in a writable location during builds.
-                  ./patches/llvm/module-cache.patch
-                ];
+                patches =
+                  # Swift’s LLVM fork based on LLVM 21 already has the TextAPI change that nixpkgs backports.
+                  lib.filter (
+                    patch:
+                    lib.versionOlder llvmVersion "21"
+                    || (patch.name or "") != "llvm-textapi-separate-arch-name-enum-label.patch"
+                  ) (old.patches or [ ])
+                  ++ [
+                    # Ensure the LLVM module cache is in a writable location during builds.
+                    ./patches/llvm/module-cache.patch
+                  ];
                 doCheck = false; # TODO: fix fork-specific tests that fail due to, e.g., not finding `libLLVM.dylib` during the test
                 # Swift relies on LLVM’s private `config.h` for feature checks (e.g., for `unistd.h`).
                 postInstall = (old.postInstall or "") + ''
