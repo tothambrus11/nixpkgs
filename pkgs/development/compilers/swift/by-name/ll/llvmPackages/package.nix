@@ -69,8 +69,6 @@ let
             # Swift’s LLVM fork needs to use `sys::path::make_absolute` instead of `sys::fs::make_absolute`.
             "llvm/gnu-install-dirs.patch" = [ { path = ./patches/21; } ];
             # This is an empty patch because Swift’s LLVM fork already has this change.
-            "llvm/llvm-textapi-separate-arch-name-enum-label.patch" = [ { path = ./patches/21; } ];
-            # This is an empty patch because Swift’s LLVM fork already has this change.
             "llvm/backport-darwin-triple-parsing.patch" = [ { path = ./patches/6.4; } ];
           };
         };
