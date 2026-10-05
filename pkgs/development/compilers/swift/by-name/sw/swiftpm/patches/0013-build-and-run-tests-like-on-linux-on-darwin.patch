@@ -40,10 +40,10 @@ index 33eb6f4..8d69e96 100644
              testInputs = [testBundleInfoPlistPath]
  
 diff --git a/Sources/Build/BuildPlan/BuildPlan+Test.swift b/Sources/Build/BuildPlan/BuildPlan+Test.swift
-index 545ecb2..ba27cde 100644
+index fb65efd..83feac9 100644
 --- a/Sources/Build/BuildPlan/BuildPlan+Test.swift
 +++ b/Sources/Build/BuildPlan/BuildPlan+Test.swift
-@@ -188,7 +188,7 @@ extension BuildPlan {
+@@ -190,7 +190,7 @@ extension BuildPlan {
              let swiftTargetDependencies: [Module.Dependency]
              let resolvedTargetDependencies: [ResolvedModule.Dependency]
  
@@ -52,7 +52,7 @@ index 545ecb2..ba27cde 100644
                  discoveryTargets = nil
                  swiftTargetDependencies = []
                  resolvedTargetDependencies = []
-@@ -198,7 +198,7 @@ extension BuildPlan {
+@@ -200,7 +200,7 @@ extension BuildPlan {
                  resolvedTargetDependencies = [.module(discoveryTargets!.resolved, conditions: [])]
              }
  
@@ -111,10 +111,10 @@ index bef8ef9..f361dae 100644
              init(_ location: XCTSourceCodeLocation) {
                  self.init(
 diff --git a/Sources/Commands/SwiftTestCommand.swift b/Sources/Commands/SwiftTestCommand.swift
-index c2ae2ad..4c313d3 100644
+index 63789d3..5958fa0 100644
 --- a/Sources/Commands/SwiftTestCommand.swift
 +++ b/Sources/Commands/SwiftTestCommand.swift
-@@ -289,8 +289,6 @@ public struct SwiftTestCommand: AsyncSwiftCommand {
+@@ -299,8 +299,6 @@ public struct SwiftTestCommand: AsyncSwiftCommand {
                  } else {
                      throw TestError.xcodeNotInstalled
                  }
@@ -123,7 +123,7 @@ index c2ae2ad..4c313d3 100644
              }
  
              if !self.options.shouldRunInParallel {
-@@ -900,11 +898,7 @@ final class TestRunner {
+@@ -934,11 +932,7 @@ final class TestRunner {
              testSpecifier = testSpecifiers.joined(separator: ",")
          }
  
@@ -135,7 +135,7 @@ index c2ae2ad..4c313d3 100644
      }
  
      /// Creates an instance of TestRunner.
-@@ -965,23 +959,8 @@ final class TestRunner {
+@@ -999,23 +993,8 @@ final class TestRunner {
              args.append(testPath.relative(to: localFileSystem.currentWorkingDirectory!).pathString)
              args.append(contentsOf: self.additionalArguments)
          } else {
@@ -160,13 +160,13 @@ index c2ae2ad..4c313d3 100644
  
          if library == .swiftTesting {
 diff --git a/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift b/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
-index e0e75b9..6ee52c4 100644
+index fced8a2..dab825e 100644
 --- a/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
 +++ b/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift
-@@ -597,10 +597,9 @@ public struct SwiftSDK: Equatable {
-             extraSwiftCFlags.append(contentsOf: sdkPaths.frameworks.flatMap { ["-F", $0.pathString] })
-             extraSwiftCFlags.append(contentsOf: sdkPaths.libraries.flatMap { ["-I", $0.pathString] })
-             extraSwiftCFlags.append(contentsOf: sdkPaths.libraries.flatMap { ["-L", $0.pathString] })
+@@ -608,10 +608,9 @@ public struct SwiftSDK: Equatable {
+             extraSwiftCFlags.append(contentsOf: sdkPaths.buildTimeFrameworkSearchPaths.flatMap { ["-F", $0.pathString] })
+             extraSwiftCFlags.append(contentsOf: sdkPaths.buildTimeLibrarySearchPaths.flatMap { ["-I", $0.pathString] })
+             extraSwiftCFlags.append(contentsOf: sdkPaths.buildTimeLibrarySearchPaths.flatMap { ["-L", $0.pathString] })
 -            xctestSupport = .supported
 -        } catch {
 -            xctestSupport = .unsupported(reason: String(describing: error))
@@ -192,15 +192,15 @@ index 357c7de..2872581 100644
              explicitlySpecifiedPath: testingParameters.explicitlySpecifiedPath
          )
 diff --git a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
-index f82f050..8a872e9 100644
+index 6339198..9948513 100644
 --- a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
 +++ b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
-@@ -315,7 +315,7 @@ public struct BuildParameters: Encodable {
-             fatalError()
-         case .test:
-             let base = "\(product.name).xctest"
--            if self.triple.isDarwin() {
-+            if case .loadableBundle = self.testProductStyle {
-                 return try RelativePath(validating: "\(base)/Contents/MacOS/\(product.name)")
-             } else {
-                 return try RelativePath(validating: base)
+@@ -337,7 +337,7 @@ public struct BuildParameters: Encodable {
+             switch buildSystemKind {
+             case .native, .xcode:
+                 let base = "\(product.name).xctest"
+-                if self.triple.isDarwin() {
++                if case .loadableBundle = self.testProductStyle {
+                     return try RelativePath(validating: "\(base)/Contents/MacOS/\(product.name)")
+                 } else {
+                     return try RelativePath(validating: base)
