@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Mon, 5 Oct 2026 17:53:29 +0200
+Subject: [PATCH] Support toolchains without a usr directory
+
+In nixpkgs, the toolchain (the `swift` package) has its tools in `bin`
+and its libraries in `lib` instead of `usr/bin` and `usr/lib`. Find
+tools and the Swift Testing macro plugin there as well.
+---
+ Sources/SWBCore/Settings/Settings.swift | 4 +++-
+ Sources/SWBCore/ToolchainRegistry.swift | 2 ++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Sources/SWBCore/Settings/Settings.swift b/Sources/SWBCore/Settings/Settings.swift
+index 5c531d0..fd90f38 100644
+--- a/Sources/SWBCore/Settings/Settings.swift
++++ b/Sources/SWBCore/Settings/Settings.swift
+@@ -4752,7 +4752,9 @@ private class SettingsBuilder: ProjectMatchLookup {
+             // which were built using the XcodeDefault toolchain, but it's using
+             // a different toolchain itself. Use external plugin flags which
+             // reference plugins from the XcodeDefault toolchain.
+-            return ["-external-plugin-path", "\(toolchain.path.str)\(testingPluginsPath)#\(toolchain.path.str)/usr/bin/swift-plugin-server"]
++            // nixpkgs: the toolchain (the `swift` package) has no `usr` directory.
++            let usrPath = localFS.exists(toolchain.path.join("usr")) ? "/usr" : ""
++            return ["-external-plugin-path", "\(toolchain.path.str)\(usrPath)/lib/swift/host/plugins/testing#\(toolchain.path.str)\(usrPath)/bin/swift-plugin-server"]
+         }
+     }
+ 
+diff --git a/Sources/SWBCore/ToolchainRegistry.swift b/Sources/SWBCore/ToolchainRegistry.swift
+index 2421228..d6651dc 100644
+--- a/Sources/SWBCore/ToolchainRegistry.swift
++++ b/Sources/SWBCore/ToolchainRegistry.swift
+@@ -291,6 +291,8 @@ public final class Toolchain: Hashable, Sendable {
+ 
+         var executableSearchPaths = [
+             path.join("usr").join("bin"),
++            // nixpkgs: the toolchain (the `swift` package) has its tools in `bin` instead of `usr/bin`.
++            path.join("bin"),
+         ]
+ 
+         for platformExtension in pluginManager.extensions(of: PlatformInfoExtensionPoint.self) {

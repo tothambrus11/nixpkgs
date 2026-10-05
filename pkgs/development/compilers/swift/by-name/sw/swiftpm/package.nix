@@ -94,8 +94,8 @@ stdenv.mkDerivation (finalAttrs: {
     # This makes XCTest work on Darwin. Swift Testing uses the same executables, so `swiftpm-testing-helper` (which
     # loads test bundles) isn’t needed.
     ./patches/0013-build-and-run-tests-like-on-linux-on-darwin.patch
-    # Swift Build needs the toolchain directory, which SwiftPM derives assuming the compiler is in `usr/bin`.
-    ./patches/0014-find-the-toolchain-directory-of-nixpkgs-toolchains.patch
+    # Swift Build assumes the toolchain has its tools in `usr/bin` and includes `llvm-ar` on Linux.
+    ./patches/0014-support-nixpkgs-toolchains-with-swift-build.patch
   ];
 
   postPatch = ''

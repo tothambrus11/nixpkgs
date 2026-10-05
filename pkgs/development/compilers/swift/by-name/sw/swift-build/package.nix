@@ -57,8 +57,8 @@ stdenv.mkDerivation (finalAttrs: {
     (replaceVars ./patches/0004-build-tests-like-on-linux-on-darwin.patch {
       libIndexStore = "${lib.getLib llvmPackages.libclang}/lib/libIndexStore${stdenv.hostPlatform.extensions.sharedLibrary}";
     })
-    # nixpkgs toolchains have their tools in `bin` instead of `usr/bin`.
-    ./patches/0005-find-tools-in-the-bin-directory-of-toolchains.patch
+    # nixpkgs toolchains have their tools and libraries in `bin` and `lib` instead of `usr/bin` and `usr/lib`.
+    ./patches/0005-support-toolchains-without-a-usr-directory.patch
   ];
 
   # FIXME: Make this a patch
