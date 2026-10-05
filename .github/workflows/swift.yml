@@ -16,9 +16,14 @@ on:
         description: IDs of previous runs whose built paths are reused instead of building them again, from oldest to newest
         default: ""
         type: string
+      platforms:
+        description: Platforms to build and test (`linux`, `darwin`, or both)
+        default: linux darwin
+        type: string
 
 concurrency:
-  group: swift-${{ github.ref }}
+  # Platforms that are built separately don’t cancel each other.
+  group: swift-${{ github.ref }}-${{ inputs.platforms || 'linux darwin' }}
   cancel-in-progress: true
 
 permissions:
@@ -27,6 +32,7 @@ permissions:
 
 jobs:
   linux-stage1:
+    if: contains(inputs.platforms || 'linux darwin', 'linux')
     uses: ./.github/workflows/swift-stage.yml
     with: { runner: ubuntu-latest, cache: linux, stage: 01-llvm-17.0.0, derivations: "llvm-17.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   linux-stage2:
@@ -79,6 +85,7 @@ jobs:
     with: { runner: ubuntu-latest, cache: linux, stage: 99-test, reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
 
   darwin-stage1:
+    if: contains(inputs.platforms || 'linux darwin', 'darwin')
     uses: ./.github/workflows/swift-stage.yml
     with: { runner: macos-15, cache: darwin, stage: 01-llvm-17.0.0, derivations: "llvm-17.0.0", reuse-run-ids: "${{ inputs.reuse-run-ids }}" }
   darwin-stage2:
