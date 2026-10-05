@@ -241,7 +241,7 @@ stdenv.mkDerivation (finalAttrs: {
   __structuredAttrs = true;
 
   passthru = {
-    inherit swiftc swift-driver;
+    inherit stdlib swiftc swift-driver;
     tests = lib.packagesFromDirectoryRecursive {
       inherit callPackage;
       directory = ./tests;
