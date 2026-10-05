@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Mon, 5 Oct 2026 17:53:29 +0200
+Subject: [PATCH 14/14] Find the toolchain directory of nixpkgs toolchains for
+ Swift Build
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+SwiftPM gives Swift Build the toolchain directory, which it finds by
+resolving the symlinks of the compiler and removing `usr/bin`. In
+nixpkgs, the toolchain (the `swift` package) has its tools in `bin`
+instead of `usr/bin`, and they are mostly symlinks to other packages,
+so this results in `/nix/store`. Swift Build then fails to find the
+compiler:
+
+    error: Unable to discover `swiftc` command line tool info: The
+    command `(cd / && env -i … /build/src/swiftc --version)` failed to
+    launch. /build/src/swiftc is not an executable file.
+
+Use the directory containing `bin` when the compiler is not in
+`usr/bin`.
+---
+ Sources/PackageModel/Toolchain.swift | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Sources/PackageModel/Toolchain.swift b/Sources/PackageModel/Toolchain.swift
+index 93d19bf..822760d 100644
+--- a/Sources/PackageModel/Toolchain.swift
++++ b/Sources/PackageModel/Toolchain.swift
+@@ -111,6 +111,11 @@ extension Toolchain {
+     /// Toolchain path that's given to Swift Build to determine whether the compiler needs to be overridden.
+     public var toolchainDir: AbsolutePath {
+         get throws {
++            // nixpkgs: the toolchain (the `swift` package) has its tools in `bin` instead of `usr/bin`. They are mostly
++            // symlinks to other packages, so don’t resolve them.
++            if swiftCompilerPath.parentDirectory.parentDirectory.basename != "usr" {
++                return swiftCompilerPath.parentDirectory.parentDirectory
++            }
+             let compilerPath = try resolveSymlinks(swiftCompilerPath)
+             let os = ProcessInfo.hostOperatingSystem
+             switch os {
