@@ -1,0 +1,146 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ambrus Toth <palpista11@gmail.com>
+Date: Mon, 5 Oct 2026 09:10:52 +0200
+Subject: [PATCH] Build tests like on Linux on Darwin
+
+nixpkgs uses swift-corelibs-xctest on Darwin because XCTest.framework
+from Xcode is not available. Like on Linux, it requires tests to be run
+by an executable with a generated entry point instead of bundles that
+are loaded by the `xctest` tool from Xcode, and it does not provide the
+XCTest APIs that are only available on Darwin.
+
+Build unit tests as dynamic libraries and build the SwiftPM test runner
+on Darwin as well, and don't use the Darwin-only XCTest APIs in the
+generated entry point.
+
+Test discovery needs libIndexStore, which nixpkgs installs with libclang
+instead of the toolchain, so fall back to it.
+---
+ .../Specs/DarwinProductTypes.xcspec           | 32 +++++++++++++------
+ .../TestEntryPointGenerationTaskAction.swift  | 10 +++---
+ .../TestEntryPointGenerationTool.swift        |  4 ++-
+ 3 files changed, 31 insertions(+), 15 deletions(-)
+
+diff --git a/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec b/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec
+index d6e43e3..3fcdd9b 100644
+--- a/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec
++++ b/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec
+@@ -107,12 +107,32 @@
+         );
+     },
+ 
++    // Unit Test (built like on Linux because nixpkgs uses swift-corelibs-xctest on Darwin)
++    {
++        _Domain = darwin;
++        Type = ProductType;
++        Identifier = com.apple.product-type.bundle.unit-test;
++        BasedOn = com.apple.product-type.library.dynamic;
++        DefaultBuildProperties = {
++            ENABLE_TESTING_SEARCH_PATHS = YES;
++            // Index store data is required to discover XCTest tests
++            COMPILER_INDEX_STORE_ENABLE = YES;
++            SWIFT_INDEX_STORE_ENABLE = YES;
++            // Testability is needed to generate code to invoke discovered XCTest tests
++            SWIFT_ENABLE_TESTABILITY = YES;
++            // The test runner is built next to the library and finds it via its rpath.
++            EXECUTABLE_PREFIX = "";
++            LD_DYLIB_INSTALL_NAME = "@rpath/$(EXECUTABLE_PATH)";
++            GENERATE_TEST_ANCHOR = YES;
++        };
++    },
++
+     // UI Testing Bundle
+     {
+         _Domain = darwin;
+         Type = ProductType;
+         Identifier = com.apple.product-type.bundle.ui-testing;
+-        BasedOn = com.apple.product-type.bundle.unit-test;
++        BasedOn = default:com.apple.product-type.bundle.unit-test;
+         Class = PBXXCTestBundleProductType;
+         Name = "UI Testing Bundle";
+         Description = "UI Testing Bundle";
+@@ -465,13 +485,7 @@
+         _Domain = darwin;
+         Type = ProductType;
+         Identifier = com.apple.product-type.tool.swiftpm-test-runner;
+-        Name = "SwiftPM Unit Test Runner";
+-        Description = "SwiftPM Unit Test Runner";
+-        DefaultBuildProperties = {
+-            __SKIP_BUILD = YES;
+-        };
+-        PackageTypes = (
+-            com.apple.package-type.mach-o-executable
+-        );
++        // Build the test runner like on Linux because nixpkgs uses swift-corelibs-xctest on Darwin.
++        BasedOn = default:com.apple.product-type.tool.swiftpm-test-runner;
+     },
+ )
+diff --git a/Sources/SWBUniversalPlatform/TestEntryPointGenerationTaskAction.swift b/Sources/SWBUniversalPlatform/TestEntryPointGenerationTaskAction.swift
+index f42509f..f993e76 100644
+--- a/Sources/SWBUniversalPlatform/TestEntryPointGenerationTaskAction.swift
++++ b/Sources/SWBUniversalPlatform/TestEntryPointGenerationTaskAction.swift
+@@ -267,7 +267,7 @@ class TestEntryPointGenerationTaskAction: TaskAction {
+                 write(record: __SwiftPMTestEventRecord(caseEvent: record))
+             }
+ 
+-            #if canImport(Darwin)
++            #if false // nixpkgs uses swift-corelibs-xctest on Darwin.
+             public func testCase(_ testCase: XCTestCase, didRecord issue: XCTIssue) {
+                 let record = __SwiftPMTestCaseFailureRecord(testCase: .init(testCase), issue: .init(issue), failureKind: .unexpected)
+                 write(record: __SwiftPMTestEventRecord(caseFailure: record))
+@@ -290,7 +290,7 @@ class TestEntryPointGenerationTaskAction: TaskAction {
+                 write(record: __SwiftPMTestEventRecord(caseEvent: record))
+             }
+ 
+-            #if canImport(Darwin)
++            #if false // nixpkgs uses swift-corelibs-xctest on Darwin.
+             public func testSuite(_ testSuite: XCTestSuite, didRecord issue: XCTIssue) {
+                 let record = __SwiftPMTestSuiteFailureRecord(suite: .init(testSuite), issue: .init(issue), failureKind: .unexpected)
+                 write(record: __SwiftPMTestEventRecord(suiteFailure: record))
+@@ -607,7 +607,7 @@ class TestEntryPointGenerationTaskAction: TaskAction {
+         #if canImport(XCTest)
+         public import XCTest
+ 
+-        #if canImport(Darwin) // XCTAttachment is unavailable in swift-corelibs-xctest.
++        #if false // XCTAttachment is unavailable in swift-corelibs-xctest.
+         extension __SwiftPMTestAttachment {
+             init(_ attachment: XCTAttachment) {
+                 self.init(
+@@ -644,7 +644,7 @@ class TestEntryPointGenerationTaskAction: TaskAction {
+         }
+ 
+         #if canImport(XCTest)
+-        #if canImport(Darwin) // XCTIssue is unavailable in swift-corelibs-xctest.
++        #if false // XCTIssue is unavailable in swift-corelibs-xctest.
+         extension __SwiftPMTestIssue {
+             init(_ issue: XCTIssue) {
+                 self.init(
+@@ -673,7 +673,7 @@ class TestEntryPointGenerationTaskAction: TaskAction {
+         }
+         #endif
+ 
+-        #if canImport(Darwin) // XCTSourceCodeLocation/XCTSourceCodeContext/XCTSourceCodeFrame/XCTSourceCodeSymbolInfo is unavailable in swift-corelibs-xctest.
++        #if false // XCTSourceCodeLocation/XCTSourceCodeContext/XCTSourceCodeFrame/XCTSourceCodeSymbolInfo is unavailable in swift-corelibs-xctest.
+         extension __SwiftPMTestLocation {
+             init(_ location: XCTSourceCodeLocation) {
+                 self.init(
+diff --git a/Sources/SWBUniversalPlatform/TestEntryPointGenerationTool.swift b/Sources/SWBUniversalPlatform/TestEntryPointGenerationTool.swift
+index ac4e5d1..580f464 100644
+--- a/Sources/SWBUniversalPlatform/TestEntryPointGenerationTool.swift
++++ b/Sources/SWBUniversalPlatform/TestEntryPointGenerationTool.swift
+@@ -25,12 +25,14 @@ final class TestEntryPointGenerationToolSpec: GenericCommandLineToolSpec, SpecId
+             let format = cbc.scope.evaluate(BuiltinMacros.LINKER_FILE_LIST_FORMAT)
+             args.append(contentsOf: ["--linker-file-list-format", .literal(.init(encodingAsUTF8: format.rawValue))])
+ 
++            var indexStoreLibraryPath = Path("@libIndexStore@") // nixpkgs installs it with libclang, not the toolchain.
+             for toolchainLibrarySearchPath in cbc.producer.toolchains.map({ StackedSearchPath(paths: $0.librarySearchPaths.paths + $0.fallbackLibrarySearchPaths.paths, fs: $0.librarySearchPaths.fs) } ) {
+                 if let path = toolchainLibrarySearchPath.findLibrary(operatingSystem: cbc.producer.hostOperatingSystem, basename: "IndexStore") {
+-                    args.append(contentsOf: ["--index-store-library-path", .path(path)])
++                    indexStoreLibraryPath = path
+                     break
+                 }
+             }
++            args.append(contentsOf: ["--index-store-library-path", .path(indexStoreLibraryPath)])
+             for input in cbc.inputs {
+                 if input.fileType.conformsTo(identifier: "text") {
+                     args.append(contentsOf: ["--linker-filelist", .path(input.absolutePath)])

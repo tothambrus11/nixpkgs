@@ -3,6 +3,7 @@
   cmake,
   coreutils,
   fetchFromGitHub,
+  llvmPackages,
   ninja,
   replaceVars,
   sqlite,
@@ -51,6 +52,11 @@ stdenv.mkDerivation (finalAttrs: {
     })
     # Don’t look in the build directory for bundles. Look only in the store.
     ./patches/0003-find-bundles-in-store.patch
+    # nixpkgs uses swift-corelibs-xctest on Darwin, which requires tests to be built like on Linux. Also find
+    # libIndexStore (needed to discover XCTest tests) in the store.
+    (replaceVars ./patches/0004-build-tests-like-on-linux-on-darwin.patch {
+      libIndexStore = "${lib.getLib llvmPackages.libclang}/lib/libIndexStore${stdenv.hostPlatform.extensions.sharedLibrary}";
+    })
   ];
 
   # FIXME: Make this a patch

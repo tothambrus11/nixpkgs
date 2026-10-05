@@ -12,6 +12,10 @@ XCTest APIs that are only available on Darwin.
 Build test products as executables on Darwin as well, and run them
 directly like on Linux. This allows XCTest-based tests to run on Darwin.
 Swift Testing-based tests run the same executable.
+
+With Swift Build, run the test runner that Swift Build builds next to
+the test library (like on Linux) instead of the test bundle. This
+requires Swift Build to build them like on Linux as well.
 ---
  .../LLBuildManifestBuilder+Product.swift      |  6 +++---
  Sources/Build/BuildPlan/BuildPlan+Test.swift  |  4 ++--
@@ -20,8 +24,9 @@ Swift Testing-based tests run the same executable.
  .../Commands/Utilities/TestingSupport.swift   |  4 ++--
  Sources/PackageModel/SwiftSDKs/SwiftSDK.swift |  7 +++----
  .../BuildParameters+Testing.swift             |  3 ++-
- .../BuildParameters/BuildParameters.swift     |  2 +-
- 8 files changed, 18 insertions(+), 39 deletions(-)
+ .../BuildParameters/BuildParameters.swift     |  6 +++---
+ .../PackagePIFProjectBuilder+Products.swift   |  3 ++-
+ 9 files changed, 22 insertions(+), 42 deletions(-)
 
 diff --git a/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift b/Sources/Build/BuildManifest/LLBuildManifestBuilder+Product.swift
 index 33eb6f4..8d69e96 100644
@@ -215,10 +220,10 @@ index 357c7de..2872581 100644
              explicitlySpecifiedPath: testingParameters.explicitlySpecifiedPath
          )
 diff --git a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
-index d714e97..6092397 100644
+index d714e97..f8f003b 100644
 --- a/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
 +++ b/Sources/SPMBuildCore/BuildParameters/BuildParameters.swift
-@@ -344,7 +344,7 @@ public struct BuildParameters: Encodable {
+@@ -344,13 +344,13 @@ public struct BuildParameters: Encodable {
          switch buildSystemKind {
          case .native, .xcode:
              let base = "\(name).xctest"
@@ -227,3 +232,33 @@ index d714e97..6092397 100644
                  return try RelativePath(validating: "\(base)/Contents/MacOS/\(name)")
              } else {
                  return try RelativePath(validating: base)
+             }
+         case .swiftbuild:
+-            if self.triple.isDarwin() {
++            if case .loadableBundle = self.testProductStyle {
+                 let base = "\(name).xctest"
+                 return try RelativePath(validating: "\(base)/Contents/MacOS/\(name)")
+             } else {
+@@ -379,7 +379,7 @@ public struct BuildParameters: Encodable {
+         case .native, .xcode:
+             return try testBinaryRelativePath(forTestProductName: name)
+         case .swiftbuild:
+-            if self.triple.isDarwin() {
++            if case .loadableBundle = self.testProductStyle {
+                 return try testBinaryRelativePath(forTestProductName: name)
+             } else {
+                 // SwiftBuild's non-Darwin test product is `<name>{.so,.dll}` — no `lib` prefix,
+diff --git a/Sources/SwiftBuildSupport/PackagePIFProjectBuilder+Products.swift b/Sources/SwiftBuildSupport/PackagePIFProjectBuilder+Products.swift
+index 59e09d3..61d13c7 100644
+--- a/Sources/SwiftBuildSupport/PackagePIFProjectBuilder+Products.swift
++++ b/Sources/SwiftBuildSupport/PackagePIFProjectBuilder+Products.swift
+@@ -155,7 +155,8 @@ extension PackagePIFProjectBuilder {
+                     settings[single: "APPLE_TEST_BUNDLE_RPATH_SHALLOW_BUNDLE_YES"] = "@loader_path/../.."
+                     settings[single: "APPLE_TEST_BUNDLE_RPATH_SHALLOW_BUNDLE_NO"] = "@loader_path/../../.."
+ 
+-                    for platform in [BuildSettings.Platform.macOS, .macCatalyst, .driverKit, .iOS, .watchOS, .tvOS, .xrOS] {
++                    // nixpkgs builds tests as dynamic libraries next to their runner on macOS (like on Linux).
++                    for platform in [BuildSettings.Platform.macCatalyst, .driverKit, .iOS, .watchOS, .tvOS, .xrOS] {
+                         settings[.LD_RUNPATH_SEARCH_PATHS, platform] = [
+                             "$(APPLE_TEST_BUNDLE_RPATH)",
+                             "$(inherited)"
