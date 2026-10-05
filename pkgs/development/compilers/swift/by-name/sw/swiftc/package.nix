@@ -195,6 +195,17 @@ stdenv.mkDerivation (finalAttrs: {
     sed -i cmake/modules/SwiftConfigureSDK.cmake \
       -e 's/^\( *\)remove_sdk_unsupported_archs(.*$/\1set(SWIFT_SDK_''${prefix}_ARCHITECTURES "arm64")/'
     grep -q 'set(SWIFT_SDK_''${prefix}_ARCHITECTURES "arm64")' cmake/modules/SwiftConfigureSDK.cmake
+  ''
+  # Only applies when the compiler builds the stdlib using a bootstrap compiler that has one.
+  + lib.optionalString (!stdenv.hostPlatform.isDarwin && stdlib == null && swift.stdlib or null != null) ''
+    # The compiler’s RPATH points to the stdlib in the build folder, which is still being built while the compiler
+    # builds it. Swift sets `LD_LIBRARY_PATH` to the runtime of the bootstrap compiler, which it expects in
+    # `lib/swift/<platform>`, but the stdlib package installs it in `lib`. Otherwise, the compiler loads the runtime
+    # libraries that are being built and fails when one isn’t there yet (e.g., `libswift_Builtin_float.so`).
+    substituteInPlace cmake/modules/SwiftUtils.cmake \
+      --replace-fail \
+        'set(bs_lib_dir "''${swift_dir}/lib/swift/''${SWIFT_SDK_''${SWIFT_HOST_VARIANT_SDK}_LIB_SUBDIR}")' \
+        'set(bs_lib_dir "${lib.getLib swift.stdlib}/lib")'
   '';
 
   dontFixCmake = true;
