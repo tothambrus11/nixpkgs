@@ -32,3 +32,7 @@
     swiftPlatform = stdenv.hostPlatform.swift.platform;
   })
 ]
+++ lib.optionals stdenv.hostPlatform.isDarwin [
+  # The Runtime module fails to build with strict availability and a deployment target older than macOS 26.
+  ./0012-Use-the-deployment-target-for-BacktracingDT-with-strict-availability.patch
+]
