@@ -198,10 +198,23 @@ jobs:
           # which is too old on macOS.
           NIX_PATH: nixpkgs=${{ github.workspace }}
         run: |
-          nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-test \
-            --run 'TERM=dumb swift test' 2>&1 | tee "$RUNNER_TEMP/test.log"
-          grep -q 'Executed 1 test, with 0 failures' "$RUNNER_TEMP/test.log"
-          grep -q 'Test run with 1 test .*passed' "$RUNNER_TEMP/test.log"
+          # Swift Build is the default build system, but the native one is still supported.
+          failed=0
+          for buildSystem in swiftbuild native; do
+            echo "::group::swift test --build-system $buildSystem"
+            log="$RUNNER_TEMP/test-$buildSystem.log"
+            nix-shell "$GITHUB_WORKSPACE" -A swiftPackages.swiftpm.tests.swift-test \
+              --run "TERM=dumb swift test --build-system $buildSystem --scratch-path .build-$buildSystem" 2>&1 \
+              | tee "$log" || true
+            echo "::endgroup::"
+            if grep -q 'Executed 1 test, with 0 failures' "$log" && grep -q 'Test run with 1 test .*passed' "$log"; then
+              echo "swift test --build-system $buildSystem passed"
+            else
+              echo "::error::swift test --build-system $buildSystem failed"
+              failed=1
+            fi
+          done
+          exit $failed
 
       - name: Run the SourceKit-LSP test (outside the Nix sandbox)
         if: ${{ !cancelled() && inputs.derivations == '' }}
