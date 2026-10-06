@@ -16,16 +16,16 @@ generated entry point.
 Test discovery needs libIndexStore, which nixpkgs installs with libclang
 instead of the toolchain, so fall back to it.
 ---
- .../Specs/DarwinProductTypes.xcspec           | 32 +++++++++++++------
+ .../Specs/DarwinProductTypes.xcspec           | 35 ++++++++++++++-----
  .../TestEntryPointGenerationTaskAction.swift  | 10 +++---
  .../TestEntryPointGenerationTool.swift        |  4 ++-
- 3 files changed, 31 insertions(+), 15 deletions(-)
+ 3 files changed, 34 insertions(+), 15 deletions(-)
 
 diff --git a/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec b/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec
-index d6e43e3..3fcdd9b 100644
+index d6e43e3..5425907 100644
 --- a/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec
 +++ b/Sources/SWBApplePlatform/Specs/DarwinProductTypes.xcspec
-@@ -107,12 +107,32 @@
+@@ -107,12 +107,35 @@
          );
      },
  
@@ -46,6 +46,9 @@ index d6e43e3..3fcdd9b 100644
 +            EXECUTABLE_PREFIX = "";
 +            LD_DYLIB_INSTALL_NAME = "@rpath/$(EXECUTABLE_PATH)";
 +            GENERATE_TEST_ANCHOR = YES;
++            // Code signing would process entitlements with `derq`, which is only available in Xcode. The linker signs
++            // the library ad hoc.
++            CODE_SIGNING_ALLOWED = NO;
 +        };
 +    },
 +
@@ -59,7 +62,7 @@ index d6e43e3..3fcdd9b 100644
          Class = PBXXCTestBundleProductType;
          Name = "UI Testing Bundle";
          Description = "UI Testing Bundle";
-@@ -465,13 +485,7 @@
+@@ -465,13 +488,7 @@
          _Domain = darwin;
          Type = ProductType;
          Identifier = com.apple.product-type.tool.swiftpm-test-runner;
