@@ -130,10 +130,24 @@ every LLVM in nixpkgs. Testing it on GitHub runners would mean building the Darw
 
 ### Porting the changes to 6.3
 
-All patches from 6.2 apply to 6.3.3 unchanged (`swiftc` patch 0011 goes into the 6.2 patch set and is shared with 6.3).
 The bootstrap chain becomes: Swift’s LLVM 17 fork → 6.2.4 stage 0, stage 1, final compiler, stdlib → Swift’s LLVM 21
 fork → 6.3.3 stage 1, final compiler, stdlib → LLDB 21. None of it is cached, so CI builds the LLVM forks in their own
 stages.
+
+- `swiftc` patch 0011 goes into the 6.2 patch set and is shared with 6.3.
+- SwiftPM patch 0013 needs rebasing (`SwiftSDK.swift` and `BuildParameters.swift` moved code around). `patch` reports
+  the rejected hunks, so always apply the full patch list to the new sources before building.
+- **Bootstrapping race on Linux.** The stage 1 compiler builds its own stdlib. Its RPATH points to the stdlib in the
+  build folder (`$ORIGIN/../lib/swift/linux`), so while that stdlib is being built, Swift sets `LD_LIBRARY_PATH` to the
+  runtime of the bootstrap compiler, which it expects in `<bootstrap swift>/lib/swift/linux`. nixpkgs installs the
+  stdlib’s libraries in `lib` instead, so the compiler loaded the half-built new runtime and failed whenever a library
+  was not there yet (`libswift_Builtin_float.so: cannot open shared object file`). It depends on the build order, so it
+  may not happen on every machine. `swiftc` substitutes the bootstrap stdlib’s `lib` in `cmake/modules/SwiftUtils.cmake`
+  (only for non-Darwin builds that build a stdlib, so the 6.2.4 derivations stay unchanged). The `swift` wrapper exposes
+  its `stdlib` in `passthru` for this.
+
+Result: everything passes on Linux, macOS 15, and macOS 26 (SwiftPM with XCTest and Swift Testing, SourceKit-LSP,
+Archivist).
 
 ### Updating to 6.4.0
 
@@ -144,12 +158,52 @@ stages.
    21.1.6), but the fork already has nixpkgs’ Darwin triple parsing backport (empty patch in `patches/6.4`).
 3. Add `patches/6.4` for packages that use `patchesForVersion` (`swiftc`, `swift-foundation`,
    `swift-corelibs-libdispatch`, `swift-llbuild`).
-4. Check every package’s patches against the new sources before building. Applying the patch list of each package in
-   order with `patch` (default fuzz) found everything that needed porting:
+4. Check every package’s patches against the new sources before building:
    - `swiftc`: 0001 and 0006 rebased; the `swift repl` null-terminator fix is upstream.
    - `swiftpm`: 0002, 0009, and 0013 rebased; the `swift-package-collection` patch is upstream. 6.4 adds a test
      debugging mode with its own Darwin-only test runner paths, which 0013 also has to switch to the Linux paths.
      6.4 raises the default oldest supported macOS to 12.0, so the `postPatch` substitution matches any version.
    - `swift-foundation` 0002, `swift-build` 0001 and 0002, `swift-docc`’s test patch: context changes only.
+   - `swift-foundation` 0003 (missing `_FoundationCShims` imports after Glibc 2.44) still applies with fuzz, but in
+     6.4 `URL_Swift.swift` is only used for the Foundation framework and the `stat` code moved to `URL_Impl.swift`, so
+     the import ended up inside `#if FOUNDATION_FRAMEWORK`. 6.4 has its own version of the patch. Watch out for patches
+     that apply with fuzz.
    - sourcekit-lsp’s vendored SwiftPM tracks `release/6.4.x`, which differs from the tag; the SwiftPM patches still
      apply to it.
+5. On Darwin, the Runtime module fails to build with strict availability (which nixpkgs enables for the final compiler)
+   and a deployment target older than macOS 26: 6.4 then defines `BacktracingDT 6.2` as macOS 26.0, but
+   `DefaultSymbolLocator` uses declarations annotated with it without availability checks (`'ElfImageCache' is only
+   available in macOS 26.0 or newer`). Upstream `main` has the same code. `swiftc` patch 0012 (6.4, Darwin only) keeps
+   it at the deployment target, like without strict availability.
+
+### Swift Build (the default build system in SwiftPM 6.4)
+
+SwiftPM 6.4 uses Swift Build by default on all platforms (6.3 still defaults to the native build system), so
+`swift build`, `swift test`, and `swiftpmHook` builds go through it. The native build system still works with
+`--build-system native` (it is marked deprecated). Problems found so far:
+
+- **Toolchain layout.** SwiftPM derives the toolchain directory it gives Swift Build by resolving the compiler’s
+  symlinks and removing `usr/bin`; for nixpkgs this resulted in `/nix/store`. Swift Build looks for tools in
+  `<toolchain>/usr/bin` and the Swift Testing macro plugin in `<toolchain>/usr/lib`. nixpkgs toolchains have `bin` and
+  `lib` at the top level, so Swift Build fell back to running `swiftc` relative to the package
+  (`/build/src/swiftc is not an executable file`). SwiftPM patch 0014 and swift-build patch 0005 handle toolchains
+  without `usr`.
+- **`llvm-ar`.** Swift Build uses `llvm-ar` on Linux, which the nixpkgs toolchain does not include. SwiftPM patch 0014
+  passes the librarian of the native build system (`$AR`) instead.
+- **libIndexStore** (for XCTest discovery) is looked up in the toolchain; swift-build patch 0004 falls back to
+  libclang’s.
+- **Tests on Darwin.** Swift Build builds Darwin tests as `.xctest` bundles linking `XCTest.framework`, and its Darwin
+  specs skip the SwiftPM test runner. swift-build patch 0004 builds them like on Linux (a dylib and a test runner with
+  a generated entry point, without the Xcode-only XCTest APIs), and SwiftPM patch 0013 runs the runner.
+- **`DEVELOPER_DIR` on Darwin.** Swift Build sets `DEVELOPER_DIR` to the toolchain directory, and the driver ran
+  `xcrun` with it (`invalid DEVELOPER_DIR path`). Still being investigated.
+
+## CI notes for version branches
+
+- The `platforms` input of `swift.yml` (`linux`, `darwin`, or both) builds one platform, and runs for different
+  platforms don’t cancel each other (the concurrency group includes it). Pushing starts a run for both platforms; cancel
+  it and dispatch with `reuse-run-ids` to reuse earlier runs.
+- macOS runners run out of disk space while building the compiler. The stage workflow deletes unused Xcodes, simulator
+  runtimes, Android, and .NET, and removes each export after importing it.
+- Jobs sometimes fail with “The job was not acquired by Runner of type hosted even after multiple attempts”. Rerun the
+  failed jobs.
