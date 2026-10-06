@@ -8,8 +8,8 @@ and its libraries in `lib` instead of `usr/bin` and `usr/lib`. Find
 tools and the Swift Testing macro plugin there as well.
 ---
  Sources/SWBCore/Settings/Settings.swift | 4 +++-
- Sources/SWBCore/ToolchainRegistry.swift | 2 ++
- 2 files changed, 5 insertions(+), 1 deletion(-)
+ Sources/SWBCore/ToolchainRegistry.swift | 7 +++++--
+ 2 files changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/Sources/SWBCore/Settings/Settings.swift b/Sources/SWBCore/Settings/Settings.swift
 index 5c531d0..9645574 100644
@@ -27,7 +27,7 @@ index 5c531d0..9645574 100644
      }
  
 diff --git a/Sources/SWBCore/ToolchainRegistry.swift b/Sources/SWBCore/ToolchainRegistry.swift
-index 2421228..d6651dc 100644
+index 2421228..0789cde 100644
 --- a/Sources/SWBCore/ToolchainRegistry.swift
 +++ b/Sources/SWBCore/ToolchainRegistry.swift
 @@ -291,6 +291,8 @@ public final class Toolchain: Hashable, Sendable {
@@ -39,3 +39,22 @@ index 2421228..d6651dc 100644
          ]
  
          for platformExtension in pluginManager.extensions(of: PlatformInfoExtensionPoint.self) {
+@@ -303,7 +305,8 @@ public final class Toolchain: Hashable, Sendable {
+         ])
+ 
+         // Testing library platform names
+-        let testingLibrarySearchDir = path.join("usr").join("lib").join("swift")
++        // nixpkgs: the toolchain (the `swift` package) has no `usr` directory.
++        let testingLibrarySearchDir = (fs.exists(path.join("usr")) ? path.join("usr") : path).join("lib").join("swift")
+         let testingLibraryPlatformNames: Set<String> = if let platformRegistry, fs.exists(testingLibrarySearchDir) {
+             Set(try fs.listdir(testingLibrarySearchDir).filter {
+                 platformRegistry.lookup(name: $0) != nil && fs.exists(testingLibrarySearchDir.join($0).join("testing"))
+@@ -394,7 +397,7 @@ public final class Toolchain: Hashable, Sendable {
+ 
+     func testingLibrarySearchPath(forPlatformNamed platformName: String) -> Path? {
+         if testingLibraryPlatformNames.contains(platformName) {
+-            path.join("usr").join("lib").join("swift").join(platformName).join("testing")
++            (localFS.exists(path.join("usr")) ? path.join("usr") : path).join("lib").join("swift").join(platformName).join("testing")
+         } else {
+             nil
+         }
