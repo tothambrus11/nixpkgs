@@ -12,7 +12,7 @@ tools and the Swift Testing macro plugin there as well.
  2 files changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/Sources/SWBCore/Settings/Settings.swift b/Sources/SWBCore/Settings/Settings.swift
-index 5c531d0..fd90f38 100644
+index 5c531d0..9645574 100644
 --- a/Sources/SWBCore/Settings/Settings.swift
 +++ b/Sources/SWBCore/Settings/Settings.swift
 @@ -4752,7 +4752,9 @@ private class SettingsBuilder: ProjectMatchLookup {
@@ -20,9 +20,9 @@ index 5c531d0..fd90f38 100644
              // a different toolchain itself. Use external plugin flags which
              // reference plugins from the XcodeDefault toolchain.
 -            return ["-external-plugin-path", "\(toolchain.path.str)\(testingPluginsPath)#\(toolchain.path.str)/usr/bin/swift-plugin-server"]
-+            // nixpkgs: the toolchain (the `swift` package) has no `usr` directory.
++            // nixpkgs: the toolchain (the `swift` package) has no `usr` directory. (The plugin server is substituted in `postPatch`.)
 +            let usrPath = localFS.exists(toolchain.path.join("usr")) ? "/usr" : ""
-+            return ["-external-plugin-path", "\(toolchain.path.str)\(usrPath)/lib/swift/host/plugins/testing#\(toolchain.path.str)\(usrPath)/bin/swift-plugin-server"]
++            return ["-external-plugin-path", "\(toolchain.path.str)\(usrPath)/lib/swift/host/plugins/testing#\(toolchain.path.str)/usr/bin/swift-plugin-server"]
          }
      }
  
