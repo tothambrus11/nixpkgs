@@ -34,10 +34,14 @@ Pass SwiftPM's environment to Swift Build (but not as build settings).
 
 On Darwin, Swift Build also generates intermediate text-based stubs of
 libraries with `tapi` from Xcode, so disable them.
+
+Swift Build also sandboxes macro plugins on Darwin, which fails in the
+Nix sandbox (`swift-plugin-server produced malformed response`), so
+disable it in Nix builds like SwiftPM's own sandbox.
 ---
- Sources/PackageModel/Toolchain.swift             |  5 +++++
- Sources/SwiftBuildSupport/SwiftBuildSystem.swift | 16 ++++++++++++++++
- 2 files changed, 21 insertions(+)
+ Sources/PackageModel/Toolchain.swift          |  5 +++++
+ .../SwiftBuildSupport/SwiftBuildSystem.swift  | 21 ++++++++++++++++++-
+ 2 files changed, 25 insertions(+), 1 deletion(-)
 
 diff --git a/Sources/PackageModel/Toolchain.swift b/Sources/PackageModel/Toolchain.swift
 index 93d19bf..822760d 100644
@@ -56,7 +60,7 @@ index 93d19bf..822760d 100644
              let os = ProcessInfo.hostOperatingSystem
              switch os {
 diff --git a/Sources/SwiftBuildSupport/SwiftBuildSystem.swift b/Sources/SwiftBuildSupport/SwiftBuildSystem.swift
-index 0e48079..c3b8d5c 100644
+index 0e48079..145988d 100644
 --- a/Sources/SwiftBuildSupport/SwiftBuildSystem.swift
 +++ b/Sources/SwiftBuildSupport/SwiftBuildSystem.swift
 @@ -660,6 +660,11 @@ public final class SwiftBuildSystem: SPMBuildCore.BuildSystem {
@@ -71,10 +75,11 @@ index 0e48079..c3b8d5c 100644
                      } catch {
                          self.observabilityScope.emit(error: error.localizedDescription)
                          throw error
-@@ -910,6 +915,17 @@ public final class SwiftBuildSystem: SPMBuildCore.BuildSystem {
+@@ -910,7 +915,21 @@ public final class SwiftBuildSystem: SPMBuildCore.BuildSystem {
              }
          }
  
+-        if shouldDisableSandbox {
 +        // nixpkgs: Swift Build uses `llvm-ar` on Linux, which nixpkgs toolchains don’t include. Use the same librarian
 +        // as the native build system (e.g., `$AR`).
 +        if !buildParameters.triple.isDarwin() && !buildParameters.triple.isWindows() {
@@ -86,6 +91,10 @@ index 0e48079..c3b8d5c 100644
 +            settings["GENERATE_INTERMEDIATE_TEXT_BASED_STUBS"] = "NO"
 +        }
 +
-         if shouldDisableSandbox {
++        // nixpkgs: like SwiftPM’s sandbox (see `Sandbox.swift`), the compiler’s sandbox for macro plugins doesn’t work
++        // in the Nix sandbox.
++        let isNixBuild = Environment.current["NIX_BUILD_TOP"] != nil && Environment.current["IN_NIX_SHELL"] == nil
++        if shouldDisableSandbox || isNixBuild {
              settings["SWIFTC_DISABLE_SANDBOX"] = "YES"
          }
+ 
