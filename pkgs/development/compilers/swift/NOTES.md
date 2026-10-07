@@ -180,23 +180,47 @@ Archivist).
 
 SwiftPM 6.4 uses Swift Build by default on all platforms (6.3 still defaults to the native build system), so
 `swift build`, `swift test`, and `swiftpmHook` builds go through it. The native build system still works with
-`--build-system native` (it is marked deprecated). Problems found so far:
+`--build-system native` (it is marked deprecated). Swift Build had never been used in nixpkgs before; these changes
+make it work (SwiftPM patch 0014, swift-build patches 0004 and 0005, `swiftpmHook`):
 
 - **Toolchain layout.** SwiftPM derives the toolchain directory it gives Swift Build by resolving the compiler’s
-  symlinks and removing `usr/bin`; for nixpkgs this resulted in `/nix/store`. Swift Build looks for tools in
-  `<toolchain>/usr/bin` and the Swift Testing macro plugin in `<toolchain>/usr/lib`. nixpkgs toolchains have `bin` and
-  `lib` at the top level, so Swift Build fell back to running `swiftc` relative to the package
-  (`/build/src/swiftc is not an executable file`). SwiftPM patch 0014 and swift-build patch 0005 handle toolchains
-  without `usr`.
-- **`llvm-ar`.** Swift Build uses `llvm-ar` on Linux, which the nixpkgs toolchain does not include. SwiftPM patch 0014
-  passes the librarian of the native build system (`$AR`) instead.
-- **libIndexStore** (for XCTest discovery) is looked up in the toolchain; swift-build patch 0004 falls back to
-  libclang’s.
+  symlinks and removing `usr/bin`; for nixpkgs this resulted in `/nix/store` (on Darwin: `xcrun: error: invalid
+  DEVELOPER_DIR path (/nix/store)`). Swift Build looks for tools in `<toolchain>/usr/bin`, for the Swift Testing macro
+  plugin in `<toolchain>/usr/lib/swift/host/plugins/testing`, and for Swift Testing in
+  `<toolchain>/usr/lib/swift/<platform>/testing`. nixpkgs toolchains have `bin` and `lib` at the top level, so Swift Build
+  fell back to running `swiftc` relative to the package (`/build/src/swiftc is not an executable file`). SwiftPM uses
+  the directory containing `bin` when the compiler is not in `usr/bin`, and swift-build falls back to paths without
+  `usr`. (swift-build’s `postPatch` substitutes the plugin server path; keep the original text of that line intact.)
+- **Environment.** Swift Build runs tasks with the process environment from the session’s user info, which SwiftPM
+  never sets, so tasks only got `PATH`. The nixpkgs compiler and linker wrappers are configured through environment
+  variables (`NIX_LDFLAGS`, `NIX_CC_WRAPPER_TARGET_HOST_*`, …), so libraries from `buildInputs` were not found
+  (`ld.bfd: cannot find -lncurses`). SwiftPM now passes its environment (but not as build settings, which Swift Build
+  would otherwise derive from it). Found by tracing a local build with `strace -f -v -e trace=execve`.
+- **`llvm-ar`.** Swift Build uses `llvm-ar` on Linux, which the nixpkgs toolchain does not include. SwiftPM passes the
+  librarian of the native build system (`$AR`) instead.
+- **Xcode-only tools on Darwin.** Signing test products processes entitlements with `derq`, and intermediate
+  text-based stubs of libraries are generated with `tapi`. Test products are not signed (the linker signs them ad hoc),
+  and SwiftPM disables the intermediate stubs on Darwin.
+- **Compiler sandbox.** On Darwin, the compiler runs macro plugins in `sandbox-exec`, which fails in the Nix sandbox
+  (`swift-plugin-server produced malformed response`). SwiftPM sets `SWIFTC_DISABLE_SANDBOX` in Nix builds, like its
+  own sandbox patch.
+- **libIndexStore** (for XCTest discovery) is looked up in the toolchain; swift-build falls back to libclang’s.
 - **Tests on Darwin.** Swift Build builds Darwin tests as `.xctest` bundles linking `XCTest.framework`, and its Darwin
-  specs skip the SwiftPM test runner. swift-build patch 0004 builds them like on Linux (a dylib and a test runner with
-  a generated entry point, without the Xcode-only XCTest APIs), and SwiftPM patch 0013 runs the runner.
-- **`DEVELOPER_DIR` on Darwin.** Swift Build sets `DEVELOPER_DIR` to the toolchain directory, and the driver ran
-  `xcrun` with it (`invalid DEVELOPER_DIR path`). Still being investigated.
+  specs skip the SwiftPM test runner. swift-build builds them like on Linux (a dylib and a test runner with a generated
+  entry point, without the Xcode-only XCTest APIs), and SwiftPM runs the runner.
+- **Installing modules.** Swift Build produces `.swiftmodule` directories instead of files; `swiftpmHook` copies them
+  with `cp -r`.
+
+Result: on Linux, macOS 15, and macOS 26, everything passes with both build systems (SwiftPM with XCTest and Swift
+Testing, Swift Testing, SourceKit-LSP built with Swift Build, Archivist).
+
+### Reproducing Linux builds locally
+
+The CI exports can be imported into a local chroot store, so Linux failures can be reproduced without building the
+toolchain: download the `nix-store-linux-*` artifacts of the runs with `gh run download`, import them in order with
+`nix-store --store ~/swiftstore --option require-sigs false --import` (fetching their references from cache.nixos.org
+first), and build with `nix-build --store ~/swiftstore --keep-failed`. `nix develop --store ~/swiftstore` and `bwrap`
+(binding `~/swiftstore/nix` to `/nix` and the kept build directory to `/build`) allow rerunning individual commands.
 
 ## CI notes for version branches
 
